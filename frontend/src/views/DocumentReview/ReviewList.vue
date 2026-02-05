@@ -87,14 +87,28 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { getDocumentList } from '@/api/review'
 
-const tableData = ref([
-  { name: '关于印发2024年数字化转型方案的通知', time: '2024-08-07', status: '校审中', lastReview: '2024-08-07', count: 2 },
-  { name: '某省人民政府关于加强公文规范性的意见', time: '2024-08-06', status: '未校审', lastReview: null, count: 0 },
-  { name: '集团公司第三季度安全生产汇报稿', time: '2024-08-05', status: '已校审', lastReview: '2024-08-06', count: 4 },
-  { name: '某市教体局2024年秋季招生政策补充说明', time: '2024-08-04', status: '未校审', lastReview: null, count: 0 },
-])
+const tableData = ref([])
+const loading = ref(false)
+
+// 获取真实列表数据
+const fetchList = async () => {
+  loading.value = true
+  try {
+    const res = await getDocumentList()
+    tableData.value = res
+  } catch (error) {
+    console.error('获取列表失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchList()
+})
 
 const getStatusClass = (status) => {
   switch (status) {

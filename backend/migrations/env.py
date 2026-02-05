@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..'
 # 必须导入所有模型类（如 User），否则 Alembic 无法检测到表的变化
 from app.db.database import Base, SQLALCHEMY_DATABASE_URL
 from app.models.user import User
+from app.models.document import Document  # 必须导入！
 
 # 3. 设置目标元数据
 target_metadata = Base.metadata
