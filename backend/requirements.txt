@@ -5,3 +5,7 @@ pydantic-settings
 sqlalchemy
 openai
 python-dotenv
+alembic
+psycopg2-binary
+passlib
+python-jose[cryptography]

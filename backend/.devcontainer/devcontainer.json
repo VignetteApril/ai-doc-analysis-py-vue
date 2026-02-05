@@ -1,34 +1,36 @@
 {
     "name": "AI Doc Analysis - Backend",
-    // 1. 指向你的 docker-compose 文件
     "dockerComposeFile": [
         "../../docker-compose.yml"
     ],
-    // 2. 指定 VS Code 应该“钻进”哪一个服务
     "service": "backend",
-    // 3. 容器内的工作目录，必须与 Dockerfile.dev 中的 WORKDIR 一致
     "workspaceFolder": "/app",
-    // 4. 配置容器内的 VS Code 插件
     "customizations": {
         "vscode": {
             "settings": {
-                // 设置容器内的 Python 解释器路径
                 "python.defaultInterpreterPath": "/usr/local/bin/python",
                 "python.languageServer": "Pylance",
                 "editor.formatOnSave": true,
-                "python.formatting.provider": "none"
+                "python.formatting.provider": "none",
+                // --- 核心修复配置开始 ---
+                // 1. 告诉 Pylance 搜索路径，"." 代表当前的 workspaceFolder (即 /app)
+                "python.analysis.extraPaths": [
+                    "/app"
+                ],
+                // 2. 开启自动搜索，让 Pylance 扫描子目录
+                "python.analysis.autoSearchPaths": true,
+                "python.analysis.indexing": true
+                // --- 核心修复配置结束 ---
             },
             "extensions": [
-                "ms-python.python", // Python 核心支持
-                "ms-python.vscode-pylance", // 智能补全（非常重要）
-                "njpwerner.autodocstring", // 自动生成文档注释
-                "tamasfe.even-better-toml", // 更好的 TOML 支持
-                "ms-ceintl.vscode-language-pack-zh-hans" // 简体中文包（如果需要）
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "njpwerner.autodocstring",
+                "tamasfe.even-better-toml",
+                "ms-ceintl.vscode-language-pack-zh-hans"
             ]
         }
     },
-    // 5. 保持容器在 VS Code 关闭后继续运行（可选）
     "shutdownAction": "none",
-    // 6. 以 root 身份运行（因为你的 Dockerfile.dev 默认是 root）
     "remoteUser": "root"
 }
