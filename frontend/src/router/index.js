@@ -1,47 +1,40 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import LoginView from '../views/LoginView.vue'
 
 const router = createRouter({
     history: createWebHistory(import.meta.env.BASE_URL),
     routes: [
         {
-            path: '/',
-            name: 'home',
-            redirect: '/dashboard' // 修改：默认尝试去仪表盘
-        },
-        {
             path: '/login',
             name: 'login',
-            component: LoginView,
-            meta: { requiresAuth: false } // 标记：不需要登录即可访问
+            component: () => import('../views/LoginView.vue')
         },
         {
-            path: '/dashboard',
-            name: 'dashboard',
-            component: () => import('../views/DashboardView.vue'),
-            meta: { requiresAuth: true } // 标记：必须登录才能访问
+            path: '/',
+            component: () => import('../layout/MainLayout.vue'), // 统一布局
+            redirect: '/review',
+            children: [
+                {
+                    path: 'review',
+                    name: 'review-list',
+                    component: () => import('../views/DocumentReview/ReviewList.vue'),
+                    meta: { title: '公文校审' }
+                },
+                {
+                    path: 'review/create',
+                    name: 'review-create',
+                    component: () => import('../views/DocumentReview/FileUpload.vue'),
+                    meta: { title: '新建校审' }
+                }
+            ]
         }
     ]
 })
 
-// --- 全局路由守卫 ---
+// 导航守卫
 router.beforeEach((to, from, next) => {
-    // 1. 获取本地存储的 Token
     const token = localStorage.getItem('token')
-
-    // 2. 检查目标路由是否需要登录权限
-    const requiresAuth = to.matched.some(record => record.meta.requiresAuth)
-
-    if (requiresAuth && !token) {
-        // 情况 A：访问受限页面但没登录 -> 踢回登录页
-        next({ name: 'login' })
-    } else if (to.name === 'login' && token) {
-        // 情况 B：已经登录了还想去登录页 -> 直接送去仪表盘
-        next({ name: 'dashboard' })
-    } else {
-        // 情况 C：正常放行
-        next()
-    }
+    if (to.path !== '/login' && !token) next('/login')
+    else next()
 })
 
 export default router

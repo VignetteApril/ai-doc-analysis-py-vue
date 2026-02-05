@@ -65,6 +65,7 @@
               >
               记住密码
             </label>
+            <a href="#" class="text-blue-600 hover:text-blue-800 font-medium">忘记密码？</a>
           </div>
 
           <button
@@ -93,7 +94,6 @@
 <script setup>
 import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-// 导入我们定义的登录 API
 import { login } from '@/api/auth'
 
 const router = useRouter()
@@ -103,10 +103,9 @@ const errMsg = ref('')
 const loginForm = reactive({
   username: '',
   password: '',
-  remember: false // 增加记住密码的状态逻辑
+  remember: false
 })
 
-// 页面加载时，尝试从本地恢复用户名（如果之前勾选了记住密码）
 onMounted(() => {
   const savedUser = localStorage.getItem('saved_username')
   if (savedUser) {
@@ -125,32 +124,59 @@ const handleLogin = async () => {
   errMsg.value = ''
 
   try {
-    // 使用封装好的 login 函数
     const res = await login({
       username: loginForm.username,
       password: loginForm.password
     })
 
-    // 1. 存储核心数据
+    // 存储认证信息
     localStorage.setItem('token', res.access_token)
     localStorage.setItem('username', res.username)
 
-    // 2. 记住密码逻辑：如果勾选则存用户名，否则清除
+    // 记住密码逻辑
     if (loginForm.remember) {
       localStorage.setItem('saved_username', loginForm.username)
     } else {
       localStorage.removeItem('saved_username')
     }
 
-    // 3. 跳转至仪表盘
-    router.push('/dashboard')
+    // ✅ 重要修复：跳转到重构后的公文列表页
+    router.push('/review')
 
   } catch (error) {
-    // 捕获后端返回的错误信息（如“用户名或密码错误”）
     console.error('Login Error:', error)
-    errMsg.value = error.response?.data?.detail || '登录失败，请检查网络连接'
+    errMsg.value = error.response?.data?.detail || '登录失败，请检查账号密码'
   } finally {
     loading.value = false
   }
 }
 </script>
+
+<style scoped>
+/* 入场动画关键帧 */
+.animate-fade-in-down {
+  animation: fadeInDown 0.8s ease-out forwards;
+}
+.animate-fade-in-up {
+  animation: fadeInUp 0.8s ease-out forwards;
+}
+
+@keyframes fadeInDown {
+  from { opacity: 0; transform: translateY(-30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 错误提示淡入淡出 */
+.fade-enter-active, .fade-leave-active {
+  transition: all 0.3s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+  transform: scale(0.95);
+}
+</style>
