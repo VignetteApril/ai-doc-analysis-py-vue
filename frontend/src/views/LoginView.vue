@@ -58,10 +58,13 @@
 
           <div class="flex items-center justify-between text-sm">
             <label class="flex items-center gap-2 cursor-pointer text-slate-500 hover:text-slate-700">
-              <input type="checkbox" class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+              <input
+                v-model="loginForm.remember"
+                type="checkbox"
+                class="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+              >
               记住密码
             </label>
-            <a href="#" class="text-blue-600 hover:text-blue-800 font-medium">匿名登录</a>
           </div>
 
           <button
@@ -88,9 +91,10 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
-import axios from 'axios'
+import { reactive, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+// 导入我们定义的登录 API
+import { login } from '@/api/auth'
 
 const router = useRouter()
 const loading = ref(false)
@@ -98,46 +102,55 @@ const errMsg = ref('')
 
 const loginForm = reactive({
   username: '',
-  password: ''
+  password: '',
+  remember: false // 增加记住密码的状态逻辑
+})
+
+// 页面加载时，尝试从本地恢复用户名（如果之前勾选了记住密码）
+onMounted(() => {
+  const savedUser = localStorage.getItem('saved_username')
+  if (savedUser) {
+    loginForm.username = savedUser
+    loginForm.remember = true
+  }
 })
 
 const handleLogin = async () => {
+  if (!loginForm.username || !loginForm.password) {
+    errMsg.value = '请填写完整信息'
+    return
+  }
+
   loading.value = true
   errMsg.value = ''
+
   try {
-    const response = await axios.post('/api/v1/auth/login', loginForm)
-    localStorage.setItem('token', response.data.access_token)
+    // 使用封装好的 login 函数
+    const res = await login({
+      username: loginForm.username,
+      password: loginForm.password
+    })
+
+    // 1. 存储核心数据
+    localStorage.setItem('token', res.access_token)
+    localStorage.setItem('username', res.username)
+
+    // 2. 记住密码逻辑：如果勾选则存用户名，否则清除
+    if (loginForm.remember) {
+      localStorage.setItem('saved_username', loginForm.username)
+    } else {
+      localStorage.removeItem('saved_username')
+    }
+
+    // 3. 跳转至仪表盘
     router.push('/dashboard')
+
   } catch (error) {
-    errMsg.value = error.response?.data?.detail || '登录失败，请检查账号密码'
+    // 捕获后端返回的错误信息（如“用户名或密码错误”）
+    console.error('Login Error:', error)
+    errMsg.value = error.response?.data?.detail || '登录失败，请检查网络连接'
   } finally {
     loading.value = false
   }
 }
 </script>
-
-<style scoped>
-.animate-fade-in-down {
-  animation: fadeInDown 0.8s ease-out forwards;
-}
-.animate-fade-in-up {
-  animation: fadeInUp 0.8s ease-out forwards;
-}
-
-@keyframes fadeInDown {
-  from { opacity: 0; transform: translateY(-20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(20px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.3s ease;
-}
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-</style>
