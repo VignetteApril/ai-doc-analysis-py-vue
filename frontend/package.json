@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@tailwindcss/postcss": "^4.1.18",
+    "@wangeditor/editor": "^5.1.23",
+    "@wangeditor/editor-for-vue": "^5.1.12",
     "autoprefixer": "^10.4.24",
     "axios": "^1.13.4",
     "pinia": "^3.0.4",

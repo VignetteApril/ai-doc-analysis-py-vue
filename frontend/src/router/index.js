@@ -24,6 +24,12 @@ const router = createRouter({
                     name: 'review-create',
                     component: () => import('../views/DocumentReview/FileUpload.vue'),
                     meta: { title: '新建校审' }
+                },
+                {
+                    path: 'review/:id',
+                    name: 'review-detail',
+                    component: () => import('../views/DocumentReview/ReviewDetail.vue'),
+                    meta: { title: '公文校审详情' }
                 }
             ]
         }

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from sqlalchemy.orm import Session
 from typing import List
 import os
@@ -16,23 +16,39 @@ router = APIRouter()
 UPLOAD_DIR = "uploads/documents"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-@router.get("/", response_model=List[dict])
+@router.get("/", response_model=dict) # 修改返回模型为字典
 def get_reviews(
+    page: int = Query(1, ge=1),
+    size: int = Query(12, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """获取当前用户的公文列表"""
-    docs = db.query(Document).filter(Document.owner_id == current_user.id).order_by(Document.created_at.desc()).all()
-    return [
-        {
-            "id": d.id,
-            "name": d.name,
-            "time": d.created_at.strftime("%Y-%m-%d"),
-            "status": d.status,
-            "lastReview": d.last_review_at.strftime("%Y-%m-%d") if d.last_review_at else None,
-            "count": d.review_count
-        } for d in docs
-    ]
+    """带分页的公文列表查询"""
+    # 1. 计算偏移量
+    offset = (page - 1) * size
+
+    # 2. 构建查询基础
+    query = db.query(Document).filter(Document.owner_id == current_user.id)
+
+    # 3. 获取总条数
+    total = query.count()
+
+    # 4. 执行分页查询
+    docs = query.order_by(Document.created_at.desc()).offset(offset).limit(size).all()
+
+    return {
+        "total": total,
+        "items": [
+            {
+                "id": d.id,
+                "name": d.name,
+                "time": d.created_at.strftime("%Y-%m-%d"),
+                "status": d.status,
+                "lastReview": d.last_review_at.strftime("%Y-%m-%d") if d.last_review_at else None,
+                "count": d.review_count
+            } for d in docs
+        ]
+    }
 
 @router.post("/upload")
 async def upload_document(
