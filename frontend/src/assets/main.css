@@ -1,0 +1,8 @@
+/* 移除旧的 @tailwind base; 等三行，改为这一行 */
+@import "tailwindcss";
+
+/* 你的其他自定义样式 */
+body {
+  margin: 0;
+  background-color: #f0f5ff;
+}

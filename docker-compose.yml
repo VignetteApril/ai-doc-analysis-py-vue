@@ -1,0 +1,83 @@
+﻿services:
+  db:
+    image: postgres:15-alpine
+    container_name: ai-doc-db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mysecretpassword}
+      POSTGRES_DB: ${POSTGRES_DB:-ai_doc_db}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ai_doc_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ai-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: ai-doc-redis
+    networks:
+      - ai-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: ai-doc-backend
+    # tty 和 stdin_open 是为了方便交互式调试 (如使用 breakpoint())
+    tty: true
+    stdin_open: true
+    volumes:
+      - ./backend:/app
+      - ./backend/uploads:/app/uploads
+      - /app/__pycache__      # 🌟 防止 Python 缓存冲突
+      - /app/.pytest_cache    # 🌟 防止测试缓存冲突
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-mysecretpassword}@db:5432/${POSTGRES_DB:-ai_doc_db}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    networks:
+      - ai-network
+
+  # dev环境下不启动
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.dev
+  #   container_name: ai-doc-frontend
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   ports:
+  #     - "5173:5173"
+  #   stdin_open: true
+  #   tty: true
+  #   environment:
+  #     - CHOKIDAR_USEPOLLING=true
+  #     # 显式指定 HMR 客户端连接，确保跨容器/宿主机通信正常
+  #     - VITE_HMR_HOST=localhost
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - ai-network
+
+networks:
+  ai-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,40 @@
+# 使用官方 Python 轻量版镜像
+FROM python:3.10.13-slim
+
+# 设置环境变量
+# PYTHONDONTWRITEBYTECODE: 禁止 Python 生成 .pyc 文件（占用空间且在挂载时可能导致权限问题）
+# PYTHONUNBUFFERED: 强制将 stdout/stderr 实时输出，不进行缓冲，方便查看 Docker 日志
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# 设置工作目录
+WORKDIR /app
+
+# 安装系统级依赖
+# libpq-dev: 用于连接 PostgreSQL (psycopg2)
+# build-essential: 用于编译某些 Python C 扩展
+# curl: 用于健康检查或调试
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libpq-dev \
+    curl \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# 🚀 优化：先复制 requirements.txt 充分利用 Docker 层缓存
+# 只要 requirements.txt 不变，再次构建时就会直接跳过安装步骤
+COPY requirements.txt .
+
+# 安装 Python 依赖
+# 如果你在国内开发，建议加上清华源或阿里源镜像 (见下方说明)
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# 为什么不写 COPY . . ?
+# 在开发环境中，我们在 docker-compose 里使用了 volumes 挂载
+# 宿主机的代码会直接覆盖容器内的 /app 目录。
+# 但为了容器的独立完整性，创建一个 uploads 目录是好习惯。
+RUN mkdir -p /app/uploads
+
+# 暴露 FastAPI 默认端口
+EXPOSE 8000
