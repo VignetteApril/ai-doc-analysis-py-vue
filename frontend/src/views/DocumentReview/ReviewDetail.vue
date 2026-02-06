@@ -8,95 +8,89 @@
         <div class="h-6 w-[1px] bg-slate-200"></div>
         <h2 class="text-lg font-bold text-slate-800 tracking-tight">{{ documentName }}</h2>
       </div>
+
       <div class="flex items-center gap-3">
-        <button class="px-5 py-2 border border-slate-200 text-[#1d70f5] rounded-xl text-sm font-medium hover:bg-blue-50 transition-all">取消</button>
-        <button @click="handleSave" class="px-8 py-2 bg-[#1d70f5] text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95">保存文档</button>
+        <button @click="handleDownload" class="px-5 py-2 border border-slate-200 text-[#1d70f5] rounded-xl text-sm font-medium hover:bg-blue-50 transition-all">下载成品</button>
+        <button @click="handleSave" class="px-8 py-2 bg-[#1d70f5] text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all active:scale-95">
+          保存草稿
+        </button>
       </div>
     </header>
 
     <div class="flex-1 flex overflow-hidden">
-      <aside class="w-[400px] border-r border-slate-200 bg-white flex flex-col shadow-xl z-10">
+      <aside class="w-[400px] border-r border-slate-200 bg-white flex flex-col shadow-xl z-10 relative">
         <div class="p-5 flex items-center justify-between border-b border-slate-50">
           <h3 class="font-bold text-slate-800 text-base">校对建议</h3>
-          <button @click="showToast('正在重新分析...', 'info')" class="px-3 py-1 bg-[#1d70f5] text-white text-xs rounded-lg font-bold shadow-md shadow-blue-500/20 hover:scale-105 transition-transform">
-            AI 重新分析
+          <button
+            @click="handleStartAI"
+            :disabled="analyzing || loading"
+            class="px-4 py-1.5 bg-[#1d70f5] text-white text-xs rounded-lg font-bold shadow-md shadow-blue-500/20 hover:scale-105 transition-all disabled:opacity-50 disabled:scale-100"
+          >
+            <span v-if="analyzing" class="flex items-center gap-2">
+              <div class="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              分析中...
+            </span>
+            <span v-else>AI 深度分析</span>
           </button>
         </div>
 
-        <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">
+        <div class="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50 relative">
+          <div v-if="analyzing" class="absolute inset-0 z-20 bg-white/60 backdrop-blur-[2px] flex flex-col items-center justify-center p-10 text-center">
+            <div class="w-12 h-12 border-4 border-[#1d70f5] border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p class="text-sm text-slate-600 font-bold">豆包 AI 正在扫描</p>
+          </div>
+
+          <div v-if="suggestions.length === 0 && !analyzing" class="flex flex-col items-center justify-center h-full opacity-40">
+            <svg class="w-16 h-16 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+            <p class="text-sm font-medium mt-4">等待开启 AI 分析</p>
+          </div>
+
           <div
             v-for="(sug, idx) in suggestions"
             :key="idx"
-            class="suggestion-card bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all relative group cursor-pointer"
-            :class="{'ring-2 ring-blue-500': activeId === idx}"
-            @click="locateError(sug.original, idx)"
+            class="suggestion-card bg-white rounded-2xl border border-slate-100 p-5 shadow-sm hover:shadow-md transition-all cursor-pointer"
+            @click="locateError(sug.original)"
           >
             <div class="flex items-center justify-between mb-3">
               <span class="text-[10px] text-slate-400 font-mono bg-slate-50 px-2 py-0.5 rounded">#{{ idx + 1 }} {{ sug.type }}</span>
-              <span :class="sug.source === 'AI分析' ? 'bg-blue-50 text-blue-500' : 'bg-orange-50 text-orange-500'" class="px-2 py-0.5 rounded text-[10px] font-bold">
-                {{ sug.source }}
-              </span>
+              <span class="bg-blue-50 text-blue-500 px-2 py-0.5 rounded text-[10px] font-bold">AI分析</span>
             </div>
             <div class="space-y-1 mb-5">
               <p class="text-xs text-slate-400 line-through italic">原文：{{ sug.original }}</p>
-              <p class="text-sm text-slate-700 font-medium">建议改为：<span class="text-[#1d70f5] font-bold text-base">{{ sug.content }}</span></p>
+              <p class="text-sm text-slate-700 font-medium leading-relaxed">建议：<span class="text-[#1d70f5] font-bold text-base">{{ sug.content }}</span></p>
             </div>
-            <div class="flex items-center justify-between border-t border-slate-50 pt-4">
-              <div class="flex gap-2">
-                <button @click.stop="handleIgnore(idx)" class="px-4 py-1.5 bg-slate-100 text-slate-500 text-xs rounded-lg hover:bg-slate-200 transition-colors font-medium">忽略</button>
-                <button @click.stop="applyReplacement(idx)" class="px-4 py-1.5 bg-[#1d70f5] text-white text-xs rounded-lg hover:bg-blue-700 shadow-sm transition-colors font-bold">替换</button>
-              </div>
-              <button class="text-[#1d70f5] text-xs flex items-center gap-1 hover:bg-blue-50 px-2 py-1 rounded-md transition-colors font-medium">定位</button>
+            <div class="flex items-center gap-2 border-t border-slate-50 pt-4">
+              <button @click.stop="handleIgnore(idx)" class="flex-1 py-1.5 bg-slate-100 text-slate-500 text-xs rounded-lg hover:bg-slate-200 font-medium">忽略</button>
+              <button @click.stop="applyReplacement(idx)" class="flex-[2] py-1.5 bg-[#1d70f5] text-white text-xs rounded-lg hover:bg-blue-700 shadow-sm font-bold">确认修改</button>
             </div>
           </div>
-          <div v-if="suggestions.length === 0" class="flex flex-col items-center justify-center py-20 text-slate-400 opacity-60">
-            <svg class="w-12 h-12 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
-            <p class="text-sm">暂无校对建议</p>
-          </div>
-        </div>
-
-        <div class="p-4 border-t border-slate-100 bg-white grid grid-cols-2 gap-3 shrink-0">
-          <button
-            @click="handleIgnoreAll"
-            :disabled="suggestions.length === 0"
-            class="py-2.5 border border-slate-200 text-slate-500 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            全部忽略
-          </button>
-          <button
-            @click="applyAllReplacements"
-            :disabled="suggestions.length === 0"
-            class="py-2.5 bg-[#1d70f5] text-white rounded-xl text-xs font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            全部替换
-          </button>
         </div>
       </aside>
 
-      <main class="flex-1 bg-[#f8faff] flex flex-col overflow-hidden">
-        <Toolbar
-          class="border-b border-slate-200 !bg-white px-4"
-          :editor="editorRef"
-          :defaultConfig="toolbarConfig"
-          mode="default"
-        />
+      <main class="flex-1 bg-slate-100/50 flex flex-col overflow-hidden">
+        <Toolbar class="border-b border-slate-200 !bg-white px-4 shrink-0" :editor="editorRef" :defaultConfig="toolbarConfig" mode="default" />
         <div class="flex-1 overflow-y-auto p-10 flex justify-center">
-          <div class="w-full max-w-4xl bg-white shadow-2xl min-h-full border border-slate-100 rounded-sm editor-paper">
+          <div class="w-full max-w-4xl bg-white shadow-2xl min-h-[1100px] border border-slate-100 rounded-sm editor-paper relative">
             <Editor
               v-model="valueHtml"
               :defaultConfig="editorConfig"
               mode="default"
-              class="h-full font-serif"
+              style="height: 1100px; overflow-y: hidden;"
               @onCreated="handleCreated"
             />
+
+            <div v-if="loading" class="absolute inset-0 z-50 bg-white flex flex-col items-center justify-center">
+               <div class="w-10 h-10 border-4 border-[#1d70f5] border-t-transparent rounded-full animate-spin mb-4"></div>
+               <p class="text-sm text-slate-400 tracking-widest font-bold">正在构建公文排版引擎...</p>
+            </div>
           </div>
         </div>
       </main>
     </div>
 
     <Transition name="toast">
-      <div v-if="toast.show" class="fixed top-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-8 py-4 rounded-2xl shadow-2xl border backdrop-blur-md"
-        :class="toast.type === 'success' ? 'bg-emerald-500/90 border-emerald-400 text-white' : (toast.type === 'info' ? 'bg-blue-500/90 border-blue-400 text-white' : 'bg-red-500/90 border-red-400 text-white')">
+      <div v-if="toast.show" class="fixed top-24 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-3 px-8 py-4 rounded-2xl shadow-2xl border backdrop-blur-md transition-all"
+        :class="toast.type === 'success' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 'bg-blue-500/90 border-blue-400 text-white'">
         <span class="font-bold text-sm">{{ toast.message }}</span>
       </div>
     </Transition>
@@ -105,86 +99,137 @@
 
 <script setup>
 import '@wangeditor/editor/dist/css/style.css'
-import { onBeforeUnmount, ref, shallowRef, reactive, onMounted } from 'vue'
+import { onBeforeUnmount, ref, shallowRef, reactive, onMounted, nextTick } from 'vue'
 import { Editor, Toolbar } from '@wangeditor/editor-for-vue'
 import { useRoute } from 'vue-router'
+import { getDocumentDetail, saveDocumentContent, downloadDocumentFile, analyzeDocumentAI } from '@/api/review'
 
 const route = useRoute()
-const documentName = ref('数字化转型方案.docx')
-const activeId = ref(null)
-
-// --- 编辑器核心状态 ---
 const editorRef = shallowRef()
-const valueHtml = ref('')
-const toolbarConfig = { excludeKeys: ['fullScreen', 'group-image', 'group-video', 'insertTable', 'codeBlock'] }
-const editorConfig = { placeholder: '正文加载中...', scroll: false }
+const valueHtml = ref('') // 保持为空，等实例好了再注入
+const documentName = ref('加载中...')
+const suggestions = ref([])
+const analyzing = ref(false)
+const loading = ref(true)
 
-// 模拟 AI 建议数据 [cite: 2026-02-05]
-const suggestions = ref([
-  { type: '语法错误', content: '行动', original: '心动', source: 'AI分析' },
-  { type: '标点连用', content: '删除“，”', original: '，，', source: 'AI分析' },
-  { type: '重复用词', content: '删除“增长”', original: '增长增长', source: 'AI分析' },
-  { type: '推荐替换', content: '稳中向好', original: '回稳', source: '词库' }
-])
+// 用于缓存后端传回的 HTML
+let remoteContent = ''
 
-// --- 逻辑方法 ---
-
-const handleCreated = (editor) => {
-  editorRef.value = editor
-  // 模拟初始化数据
-  valueHtml.value = `<p style="text-align: center;"><span style="font-size: 22px;"><strong>关于印发2024年数字化转型方案的通知</strong></span></p>
-  <p>各部委：党的十八大以来，我们不断提供<strong>心动</strong>指南。我们要关注新增长<strong>增长增长</strong>点。消费<strong>，，</strong>餐饮热度上升。我国经济<strong>回稳</strong>之势确立。</p>`
+const toolbarConfig = { excludeKeys: ['fullScreen', 'group-video', 'insertTable', 'codeBlock'] }
+const editorConfig = {
+  placeholder: '正文加载中...',
+  autoFocus: false, // 禁止自动聚焦，防止路径计算冲突
+  scroll: false
 }
 
-// 替换单条逻辑 [cite: 2026-02-05]
-const applyReplacement = (id) => {
-  const s = suggestions.value[id]
-  const editor = editorRef.value
-  if (!editor) return
+/**
+ * 核心逻辑：获取详情 [cite: 2026-02-05]
+ */
+const fetchBasicDetail = async () => {
+  loading.value = true
+  try {
+    const res = await getDocumentDetail(route.params.id)
+    documentName.value = res.name
+    remoteContent = res.content || '<p>文件内容为空</p>'
 
-  const html = editor.getHtml()
-  const newHtml = html.replace(new RegExp(s.original, 'g'), `<span style="color: #1d70f5; font-weight: bold;">${s.content}</span>`)
-  editor.setHtml(newHtml)
-
-  suggestions.value.splice(id, 1)
-  showToast('内容已成功替换并同步更新')
-}
-
-// ✅ 核心功能：全部替换逻辑
-const applyAllReplacements = () => {
-  const editor = editorRef.value
-  if (!editor || suggestions.value.length === 0) return
-
-  let currentHtml = editor.getHtml()
-  suggestions.value.forEach(s => {
-    currentHtml = currentHtml.replace(new RegExp(s.original, 'g'), `<span style="color: #1d70f5; font-weight: bold;">${s.content}</span>`)
-  })
-
-  editor.setHtml(currentHtml)
-  suggestions.value = [] // 清空建议列表
-  showToast('已完成全部内容的智能替换', 'success')
-}
-
-// ✅ 核心功能：全部忽略逻辑
-const handleIgnoreAll = () => {
-  suggestions.value = []
-  showToast('已忽略所有修改建议', 'info')
-}
-
-const handleIgnore = (id) => {
-  suggestions.value.splice(id, 1)
-  showToast('已忽略建议', 'info')
-}
-
-const locateError = (text, id) => {
-  activeId.value = id
-  const editor = editorRef.value
-  if (editor) {
-    // wangEditor 提供的选择文本功能
-    editor.select(text)
-    showToast(`正在定位：${text}`, 'info')
+    // 如果这时候 Editor 实例已经创建成功，直接注入
+    if (editorRef.value) {
+      injectContent()
+    }
+  } catch (error) {
+    showToast('获取内容失败', 'error')
+    loading.value = false
   }
 }
+
+/**
+ * 核心逻辑：手动注入 HTML 以规避 Slate 路径错误 [cite: 2026-02-05]
+ */
+const injectContent = () => {
+  if (!editorRef.value || !remoteContent) return
+
+  // 绕过 v-model 直接操作实例
+  editorRef.value.setHtml(remoteContent)
+
+  // 给 UI 渲染一点缓冲时间
+  nextTick(() => {
+    loading.value = false
+    showToast('公文解析成功', 'success')
+  })
+}
+
+/**
+ * 编辑器创建回调
+ */
+const handleCreated = (editor) => {
+  editorRef.value = editor
+  // 如果 API 响应快于编辑器创建，在此处执行注入
+  if (remoteContent) {
+    injectContent()
+  }
+}
+
+/**
+ * 触发 AI 分析
+ */
+const handleStartAI = async () => {
+  if (analyzing.value) return
+  analyzing.value = true
+  suggestions.value = []
+  try {
+    // 步骤 A: 同步当前内容
+    const html = editorRef.value.getHtml()
+    await saveDocumentContent(route.params.id, html)
+    // 步骤 B: 调用 AI
+    const res = await analyzeDocumentAI(route.params.id)
+    suggestions.value = res.suggestions
+    showToast(`AI 分析完成`, 'success')
+  } catch (error) {
+    showToast('AI 分析异常', 'error')
+  } finally {
+    analyzing.value = false
+  }
+}
+
+/**
+ * 保存草稿
+ */
+const handleSave = async () => {
+  if (!editorRef.value) return
+  try {
+    await saveDocumentContent(route.params.id, editorRef.value.getHtml())
+    showToast('已保存至云端', 'success')
+  } catch (error) { showToast('保存失败', 'error') }
+}
+
+/**
+ * 下载文档
+ */
+const handleDownload = async () => {
+  showToast('正在生成文档...', 'info')
+  try {
+    const blob = await downloadDocumentFile(route.params.id)
+    const url = window.URL.createObjectURL(new Blob([blob]))
+    const a = document.createElement('a')
+    a.href = url; a.download = `校核版_${documentName.value}.docx`
+    a.click(); window.URL.revokeObjectURL(url)
+  } catch (e) { showToast('导出失败', 'error') }
+}
+
+/**
+ * 替换建议
+ */
+const applyReplacement = (idx) => {
+  const s = suggestions.value[idx]
+  const editor = editorRef.value
+  if (!editor) return
+  const html = editor.getHtml()
+  const newHtml = html.replace(new RegExp(s.original, 'g'), `<span style="color: #1d70f5; background-color: #eef6ff; font-weight: bold;">${s.content}</span>`)
+  editor.setHtml(newHtml)
+  suggestions.value.splice(idx, 1)
+}
+
+const handleIgnore = (idx) => { suggestions.value.splice(idx, 1) }
 
 // Toast 系统
 const toast = reactive({ show: false, message: '', type: 'success' })
@@ -193,32 +238,53 @@ const showToast = (msg, type = 'success') => {
   setTimeout(() => toast.show = false, 3000)
 }
 
-const handleSave = () => {
-  showToast('文档已安全保存至云端', 'success')
-}
+// 生命周期挂载
+onMounted(() => {
+  fetchBasicDetail()
+})
 
 onBeforeUnmount(() => {
   const editor = editorRef.value
-  if (editor) editor.destroy()
+  if (editor == null) return
+  editor.destroy()
 })
 </script>
 
 <style scoped>
-/* 定制编辑器样式 */
-:deep(.w-e-text-container) { background-color: transparent !important; border: none !important; }
+/* 深度选择器强制覆盖 wangEditor 内部表格样式 [cite: 2026-02-05] */
+:deep(.w-e-text-container table) {
+  border-collapse: collapse;
+  width: 100% !important;
+  margin: 10px 0;
+}
+:deep(.w-e-text-container td), :deep(.w-e-text-container th) {
+  border: 1px solid #d1d5db !important;
+  padding: 12px !important;
+  min-width: 40px;
+}
+
+/* 强制高度解决报错 */
+:deep(.w-e-text-container) {
+  min-height: 1100px !important;
+  background-color: transparent !important;
+  border: none !important;
+}
+
 .font-serif :deep(.w-e-text-container [contenteditable]) {
   font-family: "FangSong", "仿宋", serif;
-  line-height: 2.2 !important;
-  padding: 40px 60px !important;
+  line-height: 1.8;
+  padding: 60px 90px !important;
+}
+
+.editor-paper {
+  background-color: white;
+  transition: box-shadow 0.3s ease;
 }
 
 .suggestion-card { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
-.suggestion-card:hover { transform: translateY(-3px); }
+.suggestion-card:hover { transform: translateY(-4px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
 
-/* Toast 动画 (保持不变) */
 .toast-enter-active { animation: toast-in 0.4s ease-out; }
-.toast-leave-active { transition: opacity 0.3s; }
-.toast-leave-to { opacity: 0; }
 @keyframes toast-in {
   from { opacity: 0; transform: translate(-50%, 20px); }
   to { opacity: 1; transform: translate(-50%, 0); }

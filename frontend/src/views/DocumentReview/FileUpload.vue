@@ -51,7 +51,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { uploadDocument } from '@/api/review' // 确保你已创建此 API 文件
 
@@ -60,29 +60,71 @@ const fileInput = ref(null)
 const isDragging = ref(false)
 const uploading = ref(false)
 
+// --- Toast 状态定义 ---
+const toast = reactive({ show: false, message: '', type: 'success' })
+
+const showToast = (msg, type = 'success') => {
+  toast.message = msg
+  toast.type = type
+  toast.show = true
+  setTimeout(() => { toast.show = false }, 3000)
+}
 // 处理文件上传核心逻辑
+/**
+ * 核心：处理文件上传逻辑 [cite: 2026-02-05]
+ * 解决了 Multipart Boundary 缺失及字段名匹配（422）的问题
+ */
 const processFile = async (file) => {
-  // 1. 文件格式检查
+  // 1. 基础校验：后缀名检查
   const ext = file.name.split('.').pop().toLowerCase()
-  if (!['pdf', 'doc', 'docx'].includes(ext)) {
-    alert('格式错误：仅支持 PDF、DOC 或 DOCX 文件')
+  const allowedExtensions = ['pdf', 'doc', 'docx']
+
+  if (!allowedExtensions.includes(ext)) {
+    showToast('格式不支持：仅允许 PDF, DOC 或 DOCX', 'error')
     return
   }
 
-  // 2. 准备上传
+  // 2. 准备上传状态
   uploading.value = true
 
-  try {
-    // 调用我们在 api/review.js 定义的函数
-    await uploadDocument(file)
+  // --- ✨ 核心修复：构造符合 FastAPI Form 定义的 FormData ---
+  const formData = new FormData()
 
-    // 3. 上传成功处理
-    console.log('文件上传并解析成功:', file.name)
-    // 跳转回列表页，并带上刷新标记（可选）
-    router.push('/review')
+  // 对应后端的 file: UploadFile = File(...) [cite: 2026-02-05]
+  formData.append('file', file)
+
+  // 对应后端的 name: str = Form(...) [cite: 2026-02-05]
+  // 必须添加此字段，否则后端会报 422 Field required
+  formData.append('name', file.name)
+
+  try {
+    // 3. 执行请求
+    // 注意：不要在请求头里手动设置 Content-Type，让浏览器自己处理 Boundary
+    const res = await uploadDocument(formData)
+
+    // 4. 成功后的业务流转 [cite: 2026-02-02]
+    showToast('文档上传成功，AI 正在解析...', 'success')
+
+    // 延迟跳转，给用户一点看成功反馈的时间
+    setTimeout(() => {
+      // 直接跳转到校审详情页，实现“即传即改”的高效体验
+      router.push({
+        name: 'review-detail',
+        params: { id: res.id }
+      })
+    }, 800)
+
   } catch (error) {
-    console.error('上传失败:', error)
-    alert(error.response?.data?.detail || '服务器解析文档失败，请检查文件内容或格式')
+    // 5. 异常审计：捕获并显示后端传回的 422 或 500 错误详情 [cite: 2026-02-05]
+    console.error('上传链路异常:', error)
+    const backendMsg = error.response?.data?.detail
+
+    // 如果返回的是 422 数组，提取第一个错误的 msg
+    const errorHint = Array.isArray(backendMsg)
+      ? `字段错误: ${backendMsg[0].loc.join('.')}`
+      : (backendMsg || '服务器解析失败')
+
+    showToast(errorHint, 'error')
   } finally {
     uploading.value = false
   }

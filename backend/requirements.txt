@@ -9,3 +9,7 @@ alembic
 psycopg2-binary
 passlib
 python-jose[cryptography]
+python-docx
+pymupdf
+html2docx
+mammoth

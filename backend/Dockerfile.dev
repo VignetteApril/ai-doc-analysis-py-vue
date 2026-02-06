@@ -14,16 +14,24 @@ WORKDIR /app
 # libpq-dev: 用于连接 PostgreSQL (psycopg2)
 # build-essential: 用于编译某些 Python C 扩展
 # curl: 用于健康检查或调试
+RUN sed -i 's/deb.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources && \
+    sed -i 's/security.debian.org/mirrors.aliyun.com/g' /etc/apt/sources.list.d/debian.sources
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     libpq-dev \
     curl \
+    libreoffice \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
 # 🚀 优化：先复制 requirements.txt 充分利用 Docker 层缓存
 # 只要 requirements.txt 不变，再次构建时就会直接跳过安装步骤
 COPY requirements.txt .
+
+# 永久修改 pip 全局镜像源
+RUN pip config set global.index-url https://mirrors.aliyun.com/pypi/simple/ && \
+    pip config set install.trusted-host mirrors.aliyun.com
 
 # 安装 Python 依赖
 # 如果你在国内开发，建议加上清华源或阿里源镜像 (见下方说明)

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Enum, Text
 from sqlalchemy.sql import func
 from app.db.database import Base
 import enum
@@ -14,6 +14,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(255), nullable=False)
     file_path = Column(String(512), nullable=False)  # 存储在磁盘上的路径
+    content_html = Column(Text, nullable=True)
     status = Column(String(20), default=ReviewStatus.PENDING)
     review_count = Column(Integer, default=0)
     last_review_at = Column(DateTime(timezone=True), onupdate=func.now())
