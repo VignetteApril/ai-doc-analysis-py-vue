@@ -88,7 +88,7 @@
         </div>
         <div class="flex items-center gap-2">
            <select v-model="pageSize" @change="handleSearch" class="bg-white border border-slate-200 rounded px-2 py-1 outline-none">
-             <option :value="12">12条/页</option>
+             <option :value="10">10条/页</option>
              <option :value="20">20条/页</option>
            </select>
         </div>

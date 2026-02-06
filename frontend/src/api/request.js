@@ -4,7 +4,7 @@ const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/
 
 const service = axios.create({
     baseURL: baseURL,
-    timeout: 10000
+    timeout: 120000
 })
 
 // 请求拦截器：注入 Token

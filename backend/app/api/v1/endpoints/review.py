@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Body, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from typing import List, Optional
@@ -7,6 +7,8 @@ import os
 import uuid
 import shutil
 import re
+import json
+import logging
 
 from app.db.database import get_db
 from app.models.document import Document, ReviewStatus
@@ -191,23 +193,63 @@ async def get_document_detail(
 @router.post("/{doc_id}/analyze")
 async def analyze_document_ai(
     doc_id: int,
+    payload: dict = Body(...), # 接收前端传来的 content
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """点击按钮后，真正触发耗时的 AI 深度校审"""
-    doc_record = db.query(Document).filter(Document.id == doc_id, Document.owner_id == current_user.id).first()
+    # 1. 安全校验 (保持不变)
+    doc_record = db.query(Document).filter(
+        Document.id == doc_id,
+        Document.owner_id == current_user.id
+    ).first()
 
-    # 获取需要校对的文本（清洗 HTML）
-    content_to_analyze = doc_record.content_html or DocumentParser.get_content(doc_record.file_path)
-    clean_text = re.sub('<[^<]+?>', '', content_to_analyze)
+    if not doc_record:
+        raise HTTPException(status_code=404, detail="未找到相关文档")
 
-    # 调用 AI
-    real_suggestions = await ai_service.analyze_document(clean_text)
+    # 获取 HTML 内容
+    content_html = payload.get("content") or doc_record.content_html
 
-    # 更新数据库状态
-    if real_suggestions:
-        doc_record.status = "已校审"
-        doc_record.review_count = len(real_suggestions)
-        db.commit()
+    async def event_generator():
+        """流式消息生成器"""
+        # 初始状态：标记开始
+        yield f"data: {json.dumps({'step': 'start', 'desc': '泰山 Agent 已就绪...'})}\n\n"
 
-    return {"suggestions": real_suggestions}
+        # 定义节点描述映射
+        step_map = {
+            "preprocess": "正在清洗 HTML 并隔离标签...",
+            "scan": "初审员扫描中，正在识别潜在错误...",
+            "review": "复审员复核中，正在优化语句通顺度...",
+            "finalize": "正在将建议重新映射至文档坐标...",
+        }
+
+        final_issues = []
+
+        try:
+            # 2. 🚀 调用 LangGraph 的异步流
+            # astream 会产生类似 {"node_name": {data}} 的字典
+            initial_state = {"html_content": content_html, "raw_issues": [], "final_issues": [], "iteration": 0}
+
+            async for event in ai_service.graph.astream(initial_state):
+                for node_name, output in event.items():
+                    if node_name in step_map:
+                        # 发送进度给前端
+                        yield f"data: {json.dumps({'step': node_name, 'desc': step_map[node_name], 'status': 'processing'})}\n\n"
+
+                    # 如果是最后一个节点，保存结果
+                    if node_name == "finalize":
+                        final_issues = output.get("final_issues", [])
+
+            # 3. 任务完成后，更新数据库状态
+            doc_record.status = "已校审"
+            doc_record.review_count = len(final_issues)
+            db.commit()
+
+            # 4. 发送最终结果
+            yield f"data: {json.dumps({'step': 'complete', 'results': final_issues})}\n\n"
+
+        except Exception as e:
+            logging.error(f"流式分析失败: {str(e)}")
+            yield f"data: {json.dumps({'step': 'error', 'desc': '分析中断'})}\n\n"
+
+    # 返回 SSE (Server-Sent Events) 流
+    return StreamingResponse(event_generator(), media_type="text/event-stream")

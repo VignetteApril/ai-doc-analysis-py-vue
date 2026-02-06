@@ -13,3 +13,5 @@ python-docx
 pymupdf
 html2docx
 mammoth
+langgraph
+langchain_openai
