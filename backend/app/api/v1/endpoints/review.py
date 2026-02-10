@@ -193,14 +193,18 @@ async def get_document_detail(
 @router.post("/{doc_id}/analyze")
 async def analyze_document_stream(
     doc_id: int,
-    payload: dict = Body(...),
+    payload: dict = Body(..., embed=False), # 接收前端传来的 { content: "..." }
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    流式分析接口：直接透传 AI Service 的 SSE 流
+    流式分析接口：
+    1. 接收前端编辑器内容的纯文本或 HTML
+    2. 调用 AI Service
+    3. 返回 text/event-stream 流
     """
-    # 1. 鉴权与获取文档
+
+    # 1. 权限校验
     doc_record = db.query(Document).filter(
         Document.id == doc_id,
         Document.owner_id == current_user.id
@@ -209,28 +213,42 @@ async def analyze_document_stream(
     if not doc_record:
         raise HTTPException(status_code=404, detail="未找到相关文档")
 
-    # 2. 准备内容：优先用前端传来的最新草稿，如果没有则读库
-    html_content = payload.get("content")
-    if not html_content:
-        # 如果前端没传内容，尝试从数据库或文件读取
-        html_content = doc_record.content_html or DocumentParser.get_content(doc_record.file_path)
+    # 2. 确定分析内容
+    # 优先使用前端传来的内容（用户可能编辑过），如果没有则使用数据库存的内容
+    content_to_analyze = payload.get("content")
+    if not content_to_analyze:
+        content_to_analyze = doc_record.content_html or ""
+        # 如果数据库也为空，尝试读取物理文件
+        if not content_to_analyze and doc_record.file_path:
+             try:
+                 content_to_analyze = DocumentParser.get_content(doc_record.file_path)
+             except Exception:
+                 pass
 
-    if not html_content:
-         raise HTTPException(status_code=400, detail="文档内容为空")
+    if not content_to_analyze:
+        raise HTTPException(status_code=400, detail="文档内容为空，无法分析")
 
-    # 3. 🚀 定义流生成器装饰器
-    # 这里我们需要包裹一下，以便在流结束时更新数据库状态（可选）
-    async def wrapper_generator():
-        # 直接迭代 service 的生成器
-        async for chunk in ai_service.analyze_stream(html_content):
-            # 发送给前端的数据必须是 "data: <json>\n\n" 格式
-            yield f"data: {chunk}\n\n"
-
-            # 可以在这里尝试解析 chunk 来更新 doc_record.status，
-            # 但为了不阻塞流，建议只做转发。状态更新逻辑其实也可以放在 service 里做。
+    # 3. 定义 SSE 生成器
+    async def sse_generator():
+        try:
+            # 调用 Service 的生成器
+            async for chunk in ai_service.analyze_stream(content_to_analyze):
+                # SSE 格式规范：
+                # data: <json_string>\n\n
+                json_data = json.dumps(chunk, ensure_ascii=False)
+                yield f"data: {json_data}\n\n"
+        except Exception as e:
+            logging.error(f"SSE Stream Error: {e}")
+            err_msg = json.dumps({"step": "error", "desc": "服务器内部错误"}, ensure_ascii=False)
+            yield f"data: {err_msg}\n\n"
 
     # 4. 返回流式响应
     return StreamingResponse(
-        wrapper_generator(),
-        media_type="text/event-stream"
+        sse_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no" # Nginx 配置，防止缓冲流
+        }
     )

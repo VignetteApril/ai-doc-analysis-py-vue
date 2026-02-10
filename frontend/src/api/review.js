@@ -69,11 +69,35 @@ export function uploadDocument(formData) {
     })
 }
 
-// 新增分析接口导出
-export function analyzeDocumentAI(id, content) {
-    return request({
-        url: `/review/${id}/analyze`,
-        method: 'post',
-        data: { content }
+/**
+ * AI 流式分析接口 (修复版)
+ * 使用原生 fetch 以支持 SSE 流，手动拼接 baseURL
+ */
+export function analyzeDocumentAI(docId, data) {
+    // 1. 获取 Token
+    const token = localStorage.getItem('token') || ''
+
+    // 2. 获取 BaseURL (关键修复点)
+    // 必须与 request.js 中的逻辑保持一致，指向后端 8000 端口
+    let baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
+
+    // 如果 baseURL 结尾有斜杠，去掉它，防止拼成 //review
+    if (baseURL.endsWith('/')) {
+        baseURL = baseURL.slice(0, -1)
+    }
+
+    // 3. 拼接完整 URL
+    // 结果示例: http://localhost:8000/api/v1/review/4/analyze
+    const url = `${baseURL}/review/${docId}/analyze`
+
+    // 4. 返回原生 fetch Promise
+    return fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            // 如果存在 token 则添加
+            ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify(data)
     })
 }
