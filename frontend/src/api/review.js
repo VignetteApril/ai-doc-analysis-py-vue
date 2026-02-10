@@ -74,7 +74,6 @@ export function analyzeDocumentAI(docId, data) {
     const token = localStorage.getItem('token') || ''
 
     // 2. 获取 BaseURL (关键修复点)
-    // 必须与 request.js 中的逻辑保持一致，指向后端 8000 端口
     let baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1'
 
     // 如果 baseURL 结尾有斜杠，去掉它，防止拼成 //review
@@ -83,7 +82,6 @@ export function analyzeDocumentAI(docId, data) {
     }
 
     // 3. 拼接完整 URL
-    // 结果示例: http://localhost:8000/api/v1/review/4/analyze
     const url = `${baseURL}/review/${docId}/analyze`
 
     // 4. 返回原生 fetch Promise
