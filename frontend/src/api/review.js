@@ -70,9 +70,10 @@ export function uploadDocument(formData) {
 }
 
 // 新增分析接口导出
-export function analyzeDocumentAI(id) {
+export function analyzeDocumentAI(id, content) {
     return request({
         url: `/review/${id}/analyze`,
-        method: 'post'
+        method: 'post',
+        data: { content }
     })
 }

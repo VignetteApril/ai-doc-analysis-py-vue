@@ -191,13 +191,16 @@ async def get_document_detail(
         return {"id": doc_record.id, "name": doc_record.name, "content": f"<p>解析异常: {str(e)}</p>"}
 
 @router.post("/{doc_id}/analyze")
-async def analyze_document_ai(
+async def analyze_document_stream(
     doc_id: int,
-    payload: dict = Body(...), # 接收前端传来的 content
+    payload: dict = Body(...),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # 1. 安全校验 (保持不变)
+    """
+    流式分析接口：直接透传 AI Service 的 SSE 流
+    """
+    # 1. 鉴权与获取文档
     doc_record = db.query(Document).filter(
         Document.id == doc_id,
         Document.owner_id == current_user.id
@@ -206,50 +209,28 @@ async def analyze_document_ai(
     if not doc_record:
         raise HTTPException(status_code=404, detail="未找到相关文档")
 
-    # 获取 HTML 内容
-    content_html = payload.get("content") or doc_record.content_html
+    # 2. 准备内容：优先用前端传来的最新草稿，如果没有则读库
+    html_content = payload.get("content")
+    if not html_content:
+        # 如果前端没传内容，尝试从数据库或文件读取
+        html_content = doc_record.content_html or DocumentParser.get_content(doc_record.file_path)
 
-    async def event_generator():
-        """流式消息生成器"""
-        # 初始状态：标记开始
-        yield f"data: {json.dumps({'step': 'start', 'desc': '泰山 Agent 已就绪...'})}\n\n"
+    if not html_content:
+         raise HTTPException(status_code=400, detail="文档内容为空")
 
-        # 定义节点描述映射
-        step_map = {
-            "preprocess": "正在清洗 HTML 并隔离标签...",
-            "scan": "初审员扫描中，正在识别潜在错误...",
-            "review": "复审员复核中，正在优化语句通顺度...",
-            "finalize": "正在将建议重新映射至文档坐标...",
-        }
+    # 3. 🚀 定义流生成器装饰器
+    # 这里我们需要包裹一下，以便在流结束时更新数据库状态（可选）
+    async def wrapper_generator():
+        # 直接迭代 service 的生成器
+        async for chunk in ai_service.analyze_stream(html_content):
+            # 发送给前端的数据必须是 "data: <json>\n\n" 格式
+            yield f"data: {chunk}\n\n"
 
-        final_issues = []
+            # 可以在这里尝试解析 chunk 来更新 doc_record.status，
+            # 但为了不阻塞流，建议只做转发。状态更新逻辑其实也可以放在 service 里做。
 
-        try:
-            # 2. 🚀 调用 LangGraph 的异步流
-            # astream 会产生类似 {"node_name": {data}} 的字典
-            initial_state = {"html_content": content_html, "raw_issues": [], "final_issues": [], "iteration": 0}
-
-            async for event in ai_service.graph.astream(initial_state):
-                for node_name, output in event.items():
-                    if node_name in step_map:
-                        # 发送进度给前端
-                        yield f"data: {json.dumps({'step': node_name, 'desc': step_map[node_name], 'status': 'processing'})}\n\n"
-
-                    # 如果是最后一个节点，保存结果
-                    if node_name == "finalize":
-                        final_issues = output.get("final_issues", [])
-
-            # 3. 任务完成后，更新数据库状态
-            doc_record.status = "已校审"
-            doc_record.review_count = len(final_issues)
-            db.commit()
-
-            # 4. 发送最终结果
-            yield f"data: {json.dumps({'step': 'complete', 'results': final_issues})}\n\n"
-
-        except Exception as e:
-            logging.error(f"流式分析失败: {str(e)}")
-            yield f"data: {json.dumps({'step': 'error', 'desc': '分析中断'})}\n\n"
-
-    # 返回 SSE (Server-Sent Events) 流
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    # 4. 返回流式响应
+    return StreamingResponse(
+        wrapper_generator(),
+        media_type="text/event-stream"
+    )
