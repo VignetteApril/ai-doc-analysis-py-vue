@@ -12,7 +12,6 @@ export function getDocumentList(params) {
 }
 
 /**
- * ✅ 补上缺少的：获取单篇公文详情
  * 用于详情页初始化加载
  */
 export function getDocumentDetail(id) {
@@ -23,7 +22,6 @@ export function getDocumentDetail(id) {
 }
 
 /**
- * ✅ 补上缺少的：保存文档草稿
  * 用于编辑器内容的持久化
  */
 export function saveDocumentContent(id, html) {
@@ -35,7 +33,6 @@ export function saveDocumentContent(id, html) {
 }
 
 /**
- * ✅ 补上缺少的：下载导出的 Word 文档
  * 处理二进制文件流
  */
 export function downloadDocumentFile(id) {
@@ -70,8 +67,7 @@ export function uploadDocument(formData) {
 }
 
 /**
- * AI 流式分析接口 (修复版)
- * 使用原生 fetch 以支持 SSE 流，手动拼接 baseURL
+ * AI 流式分析接口
  */
 export function analyzeDocumentAI(docId, data) {
     // 1. 获取 Token
