@@ -59,7 +59,7 @@ class AIService:
         """生成器：流式返回处理状态和结果"""
         logger.info("启动智能校阅工作流...")
 
-        yield {"step": "start", "desc": "正在启动泰山AI引擎..."}
+        yield {"step": "start", "desc": "正在启动泰山AI智能体..."}
 
         # 预处理
         clean_text = self._strip_html(text_content)

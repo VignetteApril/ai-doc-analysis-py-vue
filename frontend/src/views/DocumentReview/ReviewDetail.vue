@@ -210,6 +210,11 @@ import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
 import { Mark, mergeAttributes } from '@tiptap/core'
 import Placeholder from '@tiptap/extension-placeholder'
+// import StarterKit from '@tiptap/starter-kit';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TableHeader } from '@tiptap/extension-table-header';
 
 import {
   getDocumentDetail,
@@ -322,6 +327,12 @@ const editor = useEditor({
     Placeholder.configure({
       placeholder: '开始输入内容，或输入 "/" 使用命令...',
     }),
+    Table.configure({
+      resizable: true, // 允许调整列宽
+    }),
+    TableRow,
+    TableHeader,
+    TableCell,
   ],
   editorProps: {
     attributes: {
@@ -651,6 +662,23 @@ onBeforeUnmount(() => editor.value?.destroy())
 }
 :deep(.ai-correction-mark:hover) {
   background-color: #fde047;
+}
+/* 针对 Tiptap 内容的表格样式 */
+.ProseMirror table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+.ProseMirror td, .ProseMirror th {
+  min-width: 1em;
+  border: 1px solid #ced4da;
+  padding: 3px 5px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
 }
 
 /* 动画 */
