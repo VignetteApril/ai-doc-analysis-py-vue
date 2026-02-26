@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker exec ai-doc-backend alembic upgrade head)"
+    ]
+  }
+}

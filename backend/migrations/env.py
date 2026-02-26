@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), '..'
 from app.db.database import Base, SQLALCHEMY_DATABASE_URL
 from app.models.user import User
 from app.models.document import Document  # 必须导入！
+from app.models.vocabulary import Vocabulary  # 必须导入！
 
 # 3. 设置目标元数据
 target_metadata = Base.metadata

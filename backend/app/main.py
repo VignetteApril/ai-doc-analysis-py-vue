@@ -2,6 +2,12 @@
 from fastapi.middleware.cors import CORSMiddleware
 # 引入 v1 版本的路由总汇
 from app.api.v1.api import api_router
+# 引入所有模型，确保 create_all 时能扫描到新表
+from app.db.database import Base, engine
+from app.models import user, document, vocabulary  # noqa: F401
+
+# 自动创建缺失的表（幂等操作，不影响已有数据）
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="AI 公文校对系统 API",

@@ -30,6 +30,12 @@ const router = createRouter({
                     name: 'review-detail',
                     component: () => import('../views/DocumentReview/ReviewDetail.vue'),
                     meta: { title: '公文校审详情' }
+                },
+                {
+                    path: 'vocabulary',
+                    name: 'vocabulary',
+                    component: () => import('../views/Vocabulary/VocabularyList.vue'),
+                    meta: { title: '词库管理' }
                 }
             ]
         }

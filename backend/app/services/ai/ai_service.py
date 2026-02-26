@@ -55,8 +55,17 @@ class AIService:
 
         self.graph = self._build_workflow()
 
-    async def analyze_stream(self, text_content: str) -> AsyncGenerator[dict, None]:
-        """生成器：流式返回处理状态和结果"""
+    async def analyze_stream(
+        self,
+        text_content: str,
+        vocabularies: List[dict] = None
+    ) -> AsyncGenerator[dict, None]:
+        """生成器：流式返回处理状态和结果
+
+        Args:
+            text_content: 文档 HTML 或纯文本内容
+            vocabularies: 用户词库列表，每项包含 original_word / replacement_word / weight
+        """
         logger.info("启动智能校阅工作流...")
 
         yield {"step": "start", "desc": "正在启动泰山AI智能体..."}
@@ -66,6 +75,24 @@ class AIService:
         if not clean_text.strip():
             yield {"step": "error", "desc": "文档内容为空"}
             return
+
+        # ── 词库匹配（确定性规则，不走 LLM）──────────────────────────────
+        vocab_issues = []
+        if vocabularies:
+            for entry in vocabularies:
+                orig = entry.get("original_word", "")
+                repl = entry.get("replacement_word", "")
+                if orig and orig in clean_text:
+                    vocab_issues.append({
+                        "original": orig,
+                        "suggestion": repl,
+                        "type": "词库",
+                        "reason": f"词库命中：建议将「{orig}」替换为「{repl}」",
+                        "source": "词库"
+                    })
+            if vocab_issues:
+                logger.info(f"词库匹配命中 {len(vocab_issues)} 处")
+        # ─────────────────────────────────────────────────────────────────
 
         initial_state = {"clean_text": clean_text, "draft_issues": [], "final_issues": []}
 
@@ -78,16 +105,26 @@ class AIService:
                         yield {"step": "scanning", "desc": f"初审完成，发现 {count} 处疑似问题，正在进行复核..."}
 
                     elif node == "verifier":
-                        final = output.get("final_issues", [])
+                        ai_final = output.get("final_issues", [])
+                        # 合并词库结果（词库优先放在最前面）
+                        merged = vocab_issues + ai_final
                         yield {
                             "step": "verifying",
-                            "desc": f"复核通过 {len(final)} 处建议，准备渲染...",
-                            "data": final # 只有通过复核的数据才发给前端
+                            "desc": f"复核通过 {len(ai_final)} 处建议，词库命中 {len(vocab_issues)} 处，准备渲染...",
+                            "data": merged
                         }
 
         except Exception as e:
             logger.error(f"Workflow Error: {e}", exc_info=True)
-            yield {"step": "error", "desc": f"分析服务异常: {str(e)}"}
+            # 即便 LLM 失败，词库结果也照常返回
+            if vocab_issues:
+                yield {
+                    "step": "verifying",
+                    "desc": f"AI 分析异常，词库命中 {len(vocab_issues)} 处",
+                    "data": vocab_issues
+                }
+            else:
+                yield {"step": "error", "desc": f"分析服务异常: {str(e)}"}
 
         yield {"step": "complete", "desc": "校阅完成"}
 

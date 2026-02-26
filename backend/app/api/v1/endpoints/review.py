@@ -12,6 +12,7 @@ import logging
 
 from app.db.database import get_db
 from app.models.document import Document, ReviewStatus
+from app.models.vocabulary import Vocabulary
 from app.models.user import User
 from app.api.deps import get_current_user
 from app.utils.parser import DocumentParser
@@ -228,11 +229,20 @@ async def analyze_document_stream(
     if not content_to_analyze:
         raise HTTPException(status_code=400, detail="文档内容为空，无法分析")
 
-    # 3. 定义 SSE 生成器
+    # 3. 查询当前用户词库
+    vocab_items = db.query(Vocabulary).filter(
+        Vocabulary.owner_id == current_user.id
+    ).order_by(Vocabulary.weight.desc()).all()
+    vocabularies = [
+        {"original_word": v.original_word, "replacement_word": v.replacement_word, "weight": v.weight}
+        for v in vocab_items
+    ]
+
+    # 4. 定义 SSE 生成器
     async def sse_generator():
         try:
-            # 调用 Service 的生成器
-            async for chunk in ai_service.analyze_stream(content_to_analyze):
+            # 调用 Service 的生成器，传入词库
+            async for chunk in ai_service.analyze_stream(content_to_analyze, vocabularies=vocabularies):
                 # SSE 格式规范：
                 # data: <json_string>\n\n
                 json_data = json.dumps(chunk, ensure_ascii=False)
@@ -242,7 +252,7 @@ async def analyze_document_stream(
             err_msg = json.dumps({"step": "error", "desc": "服务器内部错误"}, ensure_ascii=False)
             yield f"data: {err_msg}\n\n"
 
-    # 4. 返回流式响应
+    # 5. 返回流式响应
     return StreamingResponse(
         sse_generator(),
         media_type="text/event-stream",

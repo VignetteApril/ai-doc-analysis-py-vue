@@ -2,7 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.db.database import get_db
 from app.models.user import User
-from app.core.security import verify_password, create_access_token
+from app.core.security import verify_password, create_access_token, hash_password
+from app.api.deps import get_current_user
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -11,6 +12,10 @@ router = APIRouter()
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str
+    new_password: str
 
 @router.post("/login")
 def login(login_data: LoginRequest, db: Session = Depends(get_db)):
@@ -46,3 +51,38 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         "token_type": "bearer",
         "username": user.username
     }
+
+
+@router.post("/change-password")
+def change_password(
+    data: ChangePasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """修改当前登录用户的密码"""
+    # 1. 校验原密码
+    if not verify_password(data.old_password, current_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="原密码不正确"
+        )
+
+    # 2. 新密码不能与原密码相同
+    if data.old_password == data.new_password:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码不能与原密码相同"
+        )
+
+    # 3. 新密码长度校验
+    if len(data.new_password) < 6:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="新密码长度不能少于6位"
+        )
+
+    # 4. 更新密码
+    current_user.hashed_password = hash_password(data.new_password)
+    db.commit()
+
+    return {"message": "密码修改成功"}
