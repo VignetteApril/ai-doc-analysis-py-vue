@@ -104,6 +104,9 @@ async def save_document(
         raise HTTPException(status_code=404, detail="公文未找到")
 
     doc.content_html = data.get("html")
+    # 如果文档有内容且状态不是已完成，则更新为已校审
+    if doc.content_html and doc.status != "已校审":
+        doc.status = "已校审"
     db.commit()
     return {"message": "保存成功"}
 

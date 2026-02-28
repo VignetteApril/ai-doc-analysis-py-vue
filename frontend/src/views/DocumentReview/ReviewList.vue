@@ -95,13 +95,15 @@
       </div>
     </div>
 
-    <Transition name="toast">
-      <div v-if="toast.show"
-           class="fixed top-12 left-1/2 -translate-x-1/2 z-[100] px-8 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-md transition-all font-bold text-sm tracking-wide"
-           :class="toast.type === 'success' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 'bg-red-500/90 border-red-400 text-white'">
-        {{ toast.message }}
-      </div>
-    </Transition>
+    <teleport to="body">
+      <Transition name="toast">
+        <div v-if="toast.show"
+             class="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-8 py-3.5 rounded-2xl shadow-2xl border backdrop-blur-md transition-all font-bold text-sm tracking-wide"
+             :class="toast.type === 'success' ? 'bg-emerald-500/90 border-emerald-400 text-white' : 'bg-red-500/90 border-red-400 text-white'">
+          {{ toast.message }}
+        </div>
+      </Transition>
+    </teleport>
   </div>
 </template>
 

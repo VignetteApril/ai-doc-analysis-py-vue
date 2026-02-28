@@ -191,12 +191,14 @@
       </transition>
     </main>
 
-    <transition name="toast-fade">
-      <div v-if="toast.show" class="fixed top-20 left-1/2 -translate-x-1/2 z-[9999] px-4 py-2 rounded-lg shadow-lg bg-slate-800 text-white text-sm font-medium flex items-center gap-3">
-        <span :class="toast.type === 'success' ? 'text-emerald-400' : 'text-rose-400'">●</span>
-        {{ toast.message }}
-      </div>
-    </transition>
+    <teleport to="body">
+      <transition name="toast-fade">
+        <div v-if="toast.show" class="fixed top-4 left-1/2 -translate-x-1/2 z-[99999] px-4 py-2 rounded-lg shadow-lg bg-slate-800 text-white text-sm font-medium flex items-center gap-3">
+          <span :class="toast.type === 'success' ? 'text-emerald-400' : 'text-rose-400'">●</span>
+          {{ toast.message }}
+        </div>
+      </transition>
+    </teleport>
   </div>
 </template>
 
