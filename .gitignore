@@ -1,1 +1,117 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
 .env
+.venv
+pyvenv.cfg
+pip-selfcheck.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Project specific
+/backend/test.db
+/backend/test.db-shm
+/backend/test.db-wal
+/backend/.pytest_cache/
+/backend/htmlcov/
+/backend/.coverage
+/backend/coverage.xml
+/backend/*.log
+/backend/uploads/
+/backend/exports/
+
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.vite/
+/frontend/.nuxt/
+/frontend/.output/
+/frontend/.turbo/
+/frontend/.vercel/
+/frontend/.next/
+/frontend/out/
+/frontend/nuxt.config.ts.timestamp
+/frontend/.nuxtignore
+/frontend/.nuxtrc
+/frontend/.nitro
+/frontend/.output
+/frontend/types/
+/frontend/.tsbuildinfo
+/frontend/.eslintcache
+/frontend/.stylelintcache
+/frontend/.svelte-kit/
+/frontend/.parcel-cache/
+
+# Docker
+.dockerignore
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Misc
+.DS_Store
+Thumbs.db
+
+# Database
+*.sqlite
+*.sqlite3
+
+# Backup files
+*~
+*.bak
+*.tmp
+
+# Editor backup files
+*.bak
+*.old
+*.orig
+*.rej
+*~
+
+# macOS
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows
+$RECYCLE.BIN/
+Desktop.ini
+pagefile.sys
+hiberfil.sys
+swapfile.sys
