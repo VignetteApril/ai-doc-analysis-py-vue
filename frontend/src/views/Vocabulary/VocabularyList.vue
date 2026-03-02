@@ -1,16 +1,14 @@
 <template>
-  <div class="h-full w-full flex items-center justify-center p-6 md:p-10 font-sans">
-    <div class="upload-card rounded-[40px] p-8 flex flex-col relative shadow-sm overflow-hidden">
-
-      <!-- 顶部工具栏 -->
-      <div class="flex items-center justify-between mb-8">
-        <div class="flex items-center gap-6">
+  <div class="h-full w-full overflow-auto p-4 md:p-6 font-sans">
+    <div class="upload-card rounded-[40px] p-6 md:p-8 flex flex-col relative shadow-sm w-full max-w-[1840px] min-h-full mx-auto">
+      <div class="flex items-center justify-between mb-8 gap-4 flex-wrap">
+        <div class="flex items-center gap-6 flex-wrap">
           <div class="flex items-center gap-3">
             <span class="text-sm text-slate-500">原词/替换词</span>
             <input
               v-model="filters.keyword"
               type="text"
-              placeholder="请输入"
+              placeholder="请输入关键词"
               class="px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm w-48 focus:ring-2 focus:ring-blue-400 focus:outline-none"
               @keyup.enter="handleSearch"
             >
@@ -29,16 +27,25 @@
           </div>
         </div>
 
-        <button
-          @click="openModal()"
-          class="flex items-center gap-2 px-6 py-2.5 bg-[#1d70f5] text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-lg transition-all active:scale-95"
-        >
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>
-          新增替换词
-        </button>
+        <div class="flex items-center gap-3">
+          <button
+            @click="goImportPage"
+            class="flex items-center gap-2 px-4 py-2.5 bg-white text-[#1d70f5] border border-[#1d70f5]/30 rounded-xl text-sm font-bold hover:bg-blue-50 transition-all"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 16V4m0 12l-4-4m4 4l4-4M4 20h16" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
+            导入词库
+          </button>
+
+          <button
+            @click="openModal()"
+            class="flex items-center gap-2 px-6 py-2.5 bg-[#1d70f5] text-white rounded-xl text-sm font-bold hover:bg-blue-700 shadow-lg transition-all active:scale-95"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"/></svg>
+            新增替换词
+          </button>
+        </div>
       </div>
 
-      <!-- 表格 -->
       <div class="flex-1 overflow-auto rounded-xl border border-slate-50 relative">
         <div v-if="loading" class="absolute inset-0 bg-white/50 backdrop-blur-[2px] z-20 flex items-center justify-center">
           <div class="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -49,6 +56,7 @@
             <tr class="bg-[#f8faff] text-slate-500 text-sm border-b border-slate-100">
               <th class="px-6 py-4 font-medium w-20">序号</th>
               <th class="px-6 py-4 font-medium">原词</th>
+              <th class="px-6 py-4 font-medium">替换词</th>
               <th class="px-6 py-4 font-medium">
                 <div class="flex items-center gap-1 cursor-pointer select-none" @click="toggleSort">
                   创建时间
@@ -57,30 +65,22 @@
                   </svg>
                 </div>
               </th>
-              <th class="px-6 py-4 font-medium">替换词</th>
-              <th class="px-6 py-4 font-medium text-center w-24">权重</th>
               <th class="px-6 py-4 font-medium text-center w-28">操作</th>
             </tr>
           </thead>
           <tbody class="text-sm divide-y divide-slate-50">
             <tr v-if="tableData.length === 0 && !loading">
-              <td colspan="6" class="px-6 py-20 text-center text-slate-400 font-medium tracking-wide">暂无词库记录，点击右上角「新增替换词」开始添加</td>
+              <td colspan="5" class="px-6 py-20 text-center text-slate-400 font-medium tracking-wide">暂无词库记录，点击右上角「新增替换词」开始添加</td>
             </tr>
             <tr v-for="(item, index) in tableData" :key="item.id" class="hover:bg-slate-50/50 transition-colors">
               <td class="px-6 py-4 text-slate-400">{{ (currentPage - 1) * pageSize + index + 1 }}</td>
               <td class="px-6 py-4 font-medium text-slate-700">
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-100 text-xs font-mono">{{ item.original_word }}</span>
               </td>
-              <td class="px-6 py-4 text-slate-400">{{ item.created_at }}</td>
               <td class="px-6 py-4 text-slate-700">
                 <span class="inline-flex items-center px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-100 text-xs font-mono">{{ item.replacement_word }}</span>
               </td>
-              <td class="px-6 py-4 text-center">
-                <span class="inline-block w-8 h-8 leading-8 text-center rounded-full text-xs font-bold"
-                  :class="item.weight >= 8 ? 'bg-red-100 text-red-600' : item.weight >= 5 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-500'">
-                  {{ item.weight }}
-                </span>
-              </td>
+              <td class="px-6 py-4 text-slate-400">{{ item.created_at }}</td>
               <td class="px-6 py-4">
                 <div class="flex items-center justify-center gap-4 text-[#1d70f5]">
                   <button @click="openModal(item)" class="hover:scale-110 transition-transform" title="编辑">
@@ -96,7 +96,6 @@
         </table>
       </div>
 
-      <!-- 分页 -->
       <div class="mt-6 flex items-center justify-end gap-6 text-sm text-slate-400">
         <span>共 {{ total }} 条</span>
         <div class="flex items-center gap-1">
@@ -121,7 +120,6 @@
       </div>
     </div>
 
-    <!-- 新增/编辑 Modal -->
     <Transition name="modal">
       <div v-if="modal.show" class="fixed inset-0 z-50 flex items-center justify-center">
         <div class="absolute inset-0 bg-black/20 backdrop-blur-sm" @click="closeModal"></div>
@@ -147,22 +145,6 @@
                 class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none"
               >
             </div>
-            <div>
-              <label class="block text-sm font-medium text-slate-600 mb-1.5">
-                权重
-                <span class="ml-2 text-xs text-slate-400 font-normal">（1-10，越大越优先显示）</span>
-              </label>
-              <div class="flex items-center gap-3">
-                <input
-                  v-model.number="modal.form.weight"
-                  type="range"
-                  min="1"
-                  max="10"
-                  class="flex-1 accent-[#1d70f5]"
-                >
-                <span class="w-8 text-center text-sm font-bold text-[#1d70f5]">{{ modal.form.weight }}</span>
-              </div>
-            </div>
           </div>
 
           <div class="flex items-center justify-end gap-3 mt-8">
@@ -180,7 +162,6 @@
       </div>
     </Transition>
 
-    <!-- Toast 通知 -->
     <teleport to="body">
       <Transition name="toast">
         <div v-if="toast.show"
@@ -195,8 +176,10 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { getVocabularyList, createVocabulary, updateVocabulary, deleteVocabulary } from '@/api/vocabulary'
 
+const router = useRouter()
 const tableData = ref([])
 const total = ref(0)
 const loading = ref(false)
@@ -211,16 +194,18 @@ const modal = reactive({
   isEdit: false,
   saving: false,
   editId: null,
-  form: { original_word: '', replacement_word: '', weight: 5 }
+  form: { original_word: '', replacement_word: '' }
 })
 
-// --- 工具函数 ---
 const showToast = (msg, type = 'success') => {
-  toast.message = msg; toast.type = type; toast.show = true
-  setTimeout(() => toast.show = false, 3000)
+  toast.message = msg
+  toast.type = type
+  toast.show = true
+  setTimeout(() => {
+    toast.show = false
+  }, 3000)
 }
 
-// --- 数据加载 ---
 const fetchList = async () => {
   loading.value = true
   try {
@@ -240,23 +225,35 @@ const fetchList = async () => {
   }
 }
 
-// --- 搜索 / 分页 ---
-const handleSearch = () => { currentPage.value = 1; fetchList() }
-const resetFilters = () => { Object.assign(filters, { keyword: '', start: '', end: '' }); handleSearch() }
-const changePage = (p) => { if (p < 1 || p > totalPages.value) return; currentPage.value = p; fetchList() }
+const handleSearch = () => {
+  currentPage.value = 1
+  fetchList()
+}
+const resetFilters = () => {
+  Object.assign(filters, { keyword: '', start: '', end: '' })
+  handleSearch()
+}
+const changePage = (p) => {
+  if (p < 1 || p > totalPages.value) return
+  currentPage.value = p
+  fetchList()
+}
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
-const toggleSort = () => { sortDesc.value = !sortDesc.value; fetchList() }
+const toggleSort = () => {
+  sortDesc.value = !sortDesc.value
+  fetchList()
+}
 
-// --- 新增/编辑 Modal ---
 const openModal = (item = null) => {
   modal.isEdit = !!item
   modal.editId = item?.id ?? null
   modal.form.original_word = item?.original_word ?? ''
   modal.form.replacement_word = item?.replacement_word ?? ''
-  modal.form.weight = item?.weight ?? 5
   modal.show = true
 }
-const closeModal = () => { modal.show = false }
+const closeModal = () => {
+  modal.show = false
+}
 
 const handleSubmit = async () => {
   if (!modal.form.original_word.trim() || !modal.form.replacement_word.trim()) {
@@ -282,7 +279,6 @@ const handleSubmit = async () => {
   }
 }
 
-// --- 删除 ---
 const handleDelete = async (id) => {
   if (!confirm('确定删除该词条吗？')) return
   loading.value = true
@@ -298,26 +294,27 @@ const handleDelete = async (id) => {
   }
 }
 
+const goImportPage = () => {
+  router.push('/vocabulary/import')
+}
+
 onMounted(() => fetchList())
 </script>
 
 <style scoped>
 .upload-card {
-  width: 100%; height: 100%; max-width: 1840px; max-height: 860px;
   background: linear-gradient(181deg, #ffffff 0%, #ffffff 65%, #dfedff 100%);
   border: solid 2px #ffffff;
 }
 
-/* Toast */
 .toast-enter-active { animation: slide-in 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); }
 .toast-leave-active { transition: opacity 0.3s; }
 .toast-leave-to { opacity: 0; }
 @keyframes slide-in {
   from { opacity: 0; transform: translate(-50%, -20px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  to { opacity: 1; transform: translate(-50%, 0); }
 }
 
-/* Modal */
 .modal-enter-active, .modal-leave-active { transition: opacity 0.25s ease; }
 .modal-enter-from, .modal-leave-to { opacity: 0; }
 .modal-enter-active .relative, .modal-leave-active .relative { transition: transform 0.25s ease; }

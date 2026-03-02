@@ -182,10 +182,37 @@
       </div>
 
       <transition name="slide-up">
-        <div v-if="analyzing" class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-slate-900 text-white pl-4 pr-6 py-3 rounded-full shadow-2xl flex items-center gap-4 z-[100] ring-4 ring-white/20">
-          <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></div>
-          <div class="flex flex-col">
-            <span class="text-sm font-medium tracking-wide">{{ currentStatusMsg }}</span>
+        <div v-if="analyzing" class="fixed bottom-8 left-1/2 -translate-x-1/2 w-[min(92vw,680px)] bg-slate-900 text-white p-4 rounded-2xl shadow-2xl z-[100] ring-4 ring-white/20">
+          <div class="flex items-start gap-3">
+            <div class="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin mt-0.5"></div>
+            <div class="flex-1 min-w-0 space-y-3">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-sm font-medium tracking-wide truncate">{{ currentStatusMsg }}</span>
+                <span class="text-xs text-slate-300 shrink-0">已耗时 {{ analysisElapsedLabel }}</span>
+              </div>
+
+              <div class="w-full h-1.5 bg-white/15 rounded-full overflow-hidden">
+                <div
+                  class="h-full bg-gradient-to-r from-sky-400 to-emerald-400 transition-all duration-500 ease-out"
+                  :style="{ width: `${analysisProgress}%` }"
+                ></div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-2">
+                <span
+                  v-for="stage in ANALYSIS_STAGES"
+                  :key="stage.key"
+                  class="text-[11px] px-2 py-1 rounded-full border transition-colors"
+                  :class="activeStage === stage.key
+                    ? 'bg-white text-slate-900 border-white'
+                    : stageOrderMap[activeStage] > stageOrderMap[stage.key]
+                      ? 'bg-emerald-500/20 text-emerald-200 border-emerald-300/30'
+                      : 'bg-white/5 text-slate-300 border-white/15'"
+                >
+                  {{ stage.label }}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </transition>
@@ -292,6 +319,10 @@ const documentName = ref('Untitled')
 const suggestions = ref([])
 const analyzing = ref(false)
 const currentStatusMsg = ref('')
+const analysisProgress = ref(0)
+const activeStage = ref('connecting')
+const analysisElapsedSeconds = ref(0)
+let analysisTicker = null
 const toast = reactive({ show: false, message: '', type: 'success' })
 const showHeadingDropdown = ref(false)
 const showColorDropdown = ref(false) // 🌈 颜色下拉状态
@@ -313,6 +344,56 @@ const currentColor = computed(() => {
   if (!editor.value) return '#000000'
   return editor.value.getAttributes('textStyle').color || '#000000'
 })
+
+const ANALYSIS_STAGES = [
+  { key: 'connecting', label: '连接服务' },
+  { key: 'start', label: '预处理' },
+  { key: 'scanning', label: '初审扫描' },
+  { key: 'verifying', label: '复核确认' },
+  { key: 'applying', label: '整理结果' },
+  { key: 'complete', label: '完成' }
+]
+
+const stageOrderMap = ANALYSIS_STAGES.reduce((acc, stage, index) => {
+  acc[stage.key] = index
+  return acc
+}, {})
+
+const stageProgressMap = {
+  connecting: 8,
+  start: 18,
+  scanning: 52,
+  verifying: 82,
+  applying: 92,
+  complete: 100,
+  error: 100
+}
+
+const analysisElapsedLabel = computed(() => `${analysisElapsedSeconds.value}s`)
+
+const startAnalysisTicker = () => {
+  stopAnalysisTicker()
+  analysisElapsedSeconds.value = 0
+  analysisTicker = setInterval(() => {
+    analysisElapsedSeconds.value += 1
+  }, 1000)
+}
+
+const stopAnalysisTicker = () => {
+  if (!analysisTicker) return
+  clearInterval(analysisTicker)
+  analysisTicker = null
+}
+
+const setAnalysisStage = (stage, desc = '') => {
+  if (stageProgressMap[stage] !== undefined) {
+    analysisProgress.value = Math.max(analysisProgress.value, stageProgressMap[stage])
+  }
+  if (stageOrderMap[stage] !== undefined) {
+    activeStage.value = stage
+  }
+  if (desc) currentStatusMsg.value = desc
+}
 
 // ==================== Tiptap 配置 ====================
 const editor = useEditor({
@@ -397,7 +478,10 @@ const setTextColor = (color) => {
 const handleStartAI = async () => {
   if (!editor.value) return
   analyzing.value = true
-  currentStatusMsg.value = "正在连接 AI 服务..."
+  analysisProgress.value = 0
+  activeStage.value = 'connecting'
+  setAnalysisStage('connecting', '正在连接 AI 服务...')
+  startAnalysisTicker()
 
   clearAllMarks()
   suggestions.value = []
@@ -409,7 +493,8 @@ const handleStartAI = async () => {
     const response = await analyzeDocumentAI(route.params.id, { content: contentToSend })
 
     if (!response.ok) throw new Error(`API 请求失败: ${response.status}`)
-    if (!response.body) throw new Error('API 响应不支持流式读取')
+    if (!response.body) throw new Error('API response does not support streaming')
+    setAnalysisStage('start')
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
@@ -431,25 +516,30 @@ const handleStartAI = async () => {
         }
       }
     }
-
+    setAnalysisStage('complete', '分析完成')
     if (suggestions.value.length > 0) {
        showToast(`分析完成，发现 ${suggestions.value.length} 处建议`)
        nextTick(() => navigateIssue(0))
     } else {
-       showToast('文档很完美', 'success')
+       showToast('文档质量良好，未发现可修改项', 'success')
     }
   } catch (err) {
+    setAnalysisStage('error')
     showToast('校阅中断: ' + (err.message || '未知错误'), 'error')
   } finally {
+    stopAnalysisTicker()
     analyzing.value = false
     currentStatusMsg.value = ''
   }
 }
 
 const handleStreamPayload = (payload, processedFingerprints) => {
-  if (payload.desc) currentStatusMsg.value = payload.desc
+  if (payload.step) setAnalysisStage(payload.step, payload.desc)
   if (payload.step === 'error') { showToast(payload.desc, 'error'); return }
-  if (payload.data && Array.isArray(payload.data)) applyIssuesIdeally(payload.data, processedFingerprints)
+  if (payload.data && Array.isArray(payload.data)) {
+    setAnalysisStage('applying', '正在整理并标注结果...')
+    applyIssuesIdeally(payload.data, processedFingerprints)
+  }
 }
 
 const applyIssuesIdeally = (newIssues, processedFingerprints) => {
@@ -543,7 +633,7 @@ const acceptSuggestion = () => {
     return found
   }).run()
   removeSuggestionAndSelectNext(sug.id)
-  showToast('✅ 已采纳')
+  showToast('已采纳建议')
 }
 
 const rejectSuggestion = () => {
@@ -558,7 +648,7 @@ const rejectSuggestion = () => {
     return true
   }).run()
   removeSuggestionAndSelectNext(sug.id)
-  showToast('已忽略')
+  showToast('已忽略建议')
 }
 
 const fetchBasicDetail = async () => {
@@ -598,7 +688,10 @@ const showToast = (msg, type = 'success') => {
 }
 
 onMounted(() => fetchBasicDetail())
-onBeforeUnmount(() => editor.value?.destroy())
+onBeforeUnmount(() => {
+  stopAnalysisTicker()
+  editor.value?.destroy()
+})
 </script>
 
 <style scoped>
@@ -665,22 +758,34 @@ onBeforeUnmount(() => editor.value?.destroy())
 :deep(.ai-correction-mark:hover) {
   background-color: #fde047;
 }
-/* 针对 Tiptap 内容的表格样式 */
-.ProseMirror table {
+/* 针对 Tiptap 内容的表格样式（scoped 下需 deep） */
+:deep(.ProseMirror table) {
   border-collapse: collapse;
   table-layout: fixed;
   width: 100%;
-  margin: 0;
+  margin: 1rem 0;
   overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.375rem;
 }
 
-.ProseMirror td, .ProseMirror th {
+:deep(.ProseMirror td), :deep(.ProseMirror th) {
   min-width: 1em;
   border: 1px solid #ced4da;
-  padding: 3px 5px;
+  padding: 6px 8px;
   vertical-align: top;
   box-sizing: border-box;
   position: relative;
+  background: #ffffff;
+}
+
+:deep(.ProseMirror th) {
+  background: #f8fafc;
+  font-weight: 600;
+}
+
+:deep(.ProseMirror table p) {
+  margin: 0;
 }
 
 /* 动画 */
@@ -690,3 +795,4 @@ onBeforeUnmount(() => editor.value?.destroy())
 .toast-fade-enter-active, .toast-fade-leave-active { transition: all 0.3s ease; }
 .toast-fade-enter-from, .toast-fade-leave-to { opacity: 0; transform: translate(-50%, -20px); }
 </style>
+

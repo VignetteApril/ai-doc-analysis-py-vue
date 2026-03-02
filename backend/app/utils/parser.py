@@ -1,118 +1,226 @@
-import mammoth
-import os
-import subprocess
+﻿import base64
 import logging
-import base64
+import os
+import re
+import subprocess
+import zipfile
+from html import escape
 
-# 配置日志审计
+import mammoth
+
+try:
+    from docx import Document as DocxDocument
+    from docx.table import Table as DocxTable
+    from docx.text.paragraph import Paragraph as DocxParagraph
+except Exception:  # pragma: no cover - optional runtime dependency
+    DocxDocument = None
+    DocxTable = None
+    DocxParagraph = None
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("DocumentParser")
 
+
 class DocumentParser:
-    """
-    公文解析器：负责将物理磁盘上的文档转换为富文本 HTML
-    """
+    """将上传文档转换为编辑器可用的 HTML。"""
 
     @staticmethod
     def get_content(file_path: str) -> str:
         if not os.path.exists(file_path):
-            logger.error(f"文件未找到: {file_path}")
+            logger.error("文件未找到: %s", file_path)
             return "<p>错误：服务器找不到该物理文件。</p>"
 
-        ext = file_path.split('.')[-1].lower()
+        ext = os.path.splitext(file_path)[1].lower()
 
-        if ext == 'docx':
+        if ext == ".docx":
             return DocumentParser._parse_docx(file_path)
-        elif ext == 'doc':
+        if ext == ".doc":
             return DocumentParser._parse_doc_via_conversion(file_path)
-        else:
-            return f"<p>不支持的格式: {ext}。请上传 docx 或 doc 文件。</p>"
+
+        return f"<p>暂不支持的格式: {escape(ext)}。请上传 docx 或 doc 文件。</p>"
 
     @staticmethod
     def _convert_image(image):
-        """
-        图片处理钩子：将图片转换为 Base64
-        注意：生产环境建议这里将图片上传到对象存储(OSS/S3)，返回 URL，
-        而不是返回 Base64，否则 HTML 会非常大。
-        """
         with image.open() as image_bytes:
             encoded_src = base64.b64encode(image_bytes.read()).decode("ascii")
-
-        return {
-            "src": f"data:{image.content_type};base64,{encoded_src}"
-        }
+        return {"src": f"data:{image.content_type};base64,{encoded_src}"}
 
     @staticmethod
     def _parse_docx(file_path: str) -> str:
         """
-        使用 Mammoth 解析 docx
+        主路径：Mammoth 转 HTML。
+        兜底：若 Word 含表格但 Mammoth 输出无 table，则用 python-docx 重建结构。
         """
         try:
             with open(file_path, "rb") as docx_file:
-                # 1. 定义样式映射 (Style Map)
-                # Mammoth 默认有时候识别不出复杂的标题，这里强制映射
-                # 还可以将 Word 中的特定样式映射为 HTML 的 class
                 style_map = """
                 p[style-name='Heading 1'] => h1
                 p[style-name='Heading 2'] => h2
                 p[style-name='Heading 3'] => h3
                 p[style-name='Title'] => h1.doc-title
                 p[style-name='Subtitle'] => h2.doc-subtitle
-                table => table.table-wrapper
                 """
-                # 注意：mammoth 不太支持直接给 table 加 class，但可以尝试映射内容
 
-                # 2. 执行转换
                 result = mammoth.convert_to_html(
                     docx_file,
                     style_map=style_map,
-                    convert_image=mammoth.images.img_element(DocumentParser._convert_image) # 显式处理图片
+                    convert_image=mammoth.images.img_element(DocumentParser._convert_image),
                 )
 
-                html = result.value
+            html = (result.value or "").strip()
+            if result.messages:
+                warnings = [m.message for m in result.messages if "unknown" not in m.message.lower()]
+                if warnings:
+                    logger.warning("Mammoth 解析警告: %s", warnings)
 
-                # 3. 记录警告 (这对调试 Word 格式非常有用)
-                if result.messages:
-                    # 过滤掉一些无关痛痒的警告
-                    warnings = [m.message for m in result.messages if "unknown" not in m.message]
-                    if warnings:
-                        logger.warning(f"解析警告: {warnings}")
+            has_doc_table = DocumentParser._docx_contains_table(file_path)
+            has_html_table = "<table" in html.lower()
 
-                if not html.strip():
-                    return "<p>该文档内容为空。</p>"
+            # 关键兜底：文档有表格，但解析结果没有 table 结构。
+            if has_doc_table and not has_html_table:
+                logger.warning("检测到 DOCX 含表格，但 Mammoth 输出无 <table>，启用 python-docx 兜底")
+                fallback_html = DocumentParser._parse_docx_with_python_docx(file_path)
+                if fallback_html.strip():
+                    return fallback_html
 
-                logger.info(f"✅ 成功解析 docx: {file_path}")
+            if html:
                 return html
-        except Exception as e:
-            logger.error(f"🔥 Mammoth 解析崩溃: {str(e)}")
-            return f"<p>解析异常: {str(e)}</p>"
+
+            # Mammoth 为空时兜底
+            fallback_html = DocumentParser._parse_docx_with_python_docx(file_path)
+            if fallback_html.strip():
+                return fallback_html
+
+            return "<p>该文档内容为空。</p>"
+
+        except Exception as exc:
+            logger.error("DOCX 解析异常: %s", exc)
+            fallback_html = DocumentParser._parse_docx_with_python_docx(file_path)
+            if fallback_html.strip():
+                return fallback_html
+            return f"<p>解析异常: {escape(str(exc))}</p>"
+
+    @staticmethod
+    def _docx_contains_table(file_path: str) -> bool:
+        try:
+            with zipfile.ZipFile(file_path) as zf:
+                xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
+                return "<w:tbl" in xml
+        except Exception:
+            return False
+
+    @staticmethod
+    def _parse_docx_with_python_docx(file_path: str) -> str:
+        if DocxDocument is None:
+            logger.warning("python-docx 不可用，无法执行 DOCX 结构化兜底")
+            return ""
+
+        try:
+            doc = DocxDocument(file_path)
+            blocks = []
+
+            for block in DocumentParser._iter_block_items(doc):
+                if DocxParagraph is not None and isinstance(block, DocxParagraph):
+                    blocks.append(DocumentParser._paragraph_to_html(block))
+                elif DocxTable is not None and isinstance(block, DocxTable):
+                    blocks.append(DocumentParser._table_to_html(block))
+
+            html = "\n".join(part for part in blocks if part)
+            return html or ""
+        except Exception as exc:
+            logger.error("python-docx 兜底解析失败: %s", exc)
+            return ""
+
+    @staticmethod
+    def _iter_block_items(document):
+        if DocxParagraph is None or DocxTable is None:
+            return []
+
+        body = document.element.body
+        for child in body.iterchildren():
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag == "p":
+                yield DocxParagraph(child, document)
+            elif tag == "tbl":
+                yield DocxTable(child, document)
+
+    @staticmethod
+    def _paragraph_to_html(paragraph) -> str:
+        text = (paragraph.text or "").strip()
+        style_name = (getattr(paragraph.style, "name", "") or "").lower()
+
+        if not text:
+            return "<p><br/></p>"
+
+        if "heading 1" in style_name:
+            tag = "h1"
+        elif "heading 2" in style_name:
+            tag = "h2"
+        elif "heading 3" in style_name:
+            tag = "h3"
+        else:
+            tag = "p"
+
+        run_html = []
+        for run in paragraph.runs:
+            run_text = escape(run.text or "")
+            if not run_text:
+                continue
+            if run.bold:
+                run_text = f"<strong>{run_text}</strong>"
+            if run.italic:
+                run_text = f"<em>{run_text}</em>"
+            if run.underline:
+                run_text = f"<u>{run_text}</u>"
+            run_html.append(run_text)
+
+        content = "".join(run_html) if run_html else escape(text)
+        return f"<{tag}>{content}</{tag}>"
+
+    @staticmethod
+    def _table_to_html(table) -> str:
+        rows_html = []
+        for row in table.rows:
+            cells_html = []
+            for cell in row.cells:
+                paragraphs = [
+                    DocumentParser._paragraph_to_html(p)
+                    for p in cell.paragraphs
+                    if (p.text or "").strip() or len(p.runs) > 0
+                ]
+                cell_content = "".join(paragraphs) if paragraphs else "<p><br/></p>"
+                cells_html.append(f"<td>{cell_content}</td>")
+            rows_html.append(f"<tr>{''.join(cells_html)}</tr>")
+
+        return f"<table><tbody>{''.join(rows_html)}</tbody></table>"
 
     @staticmethod
     def _parse_doc_via_conversion(file_path: str) -> str:
-        # 这部分代码保持不变，逻辑没问题
-        logger.info(f"🔄 检测到旧版格式，尝试转换: {file_path}")
+        logger.info("检测到 .doc，尝试先转 docx: %s", file_path)
         try:
             output_dir = os.path.dirname(file_path)
-            # 使用 LibreOffice 转换
-            process = subprocess.run([
-                'libreoffice',
-                '--headless',
-                '--convert-to', 'docx',
-                file_path,
-                '--outdir', output_dir
-            ], capture_output=True, text=True, check=True)
+            subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--convert-to",
+                    "docx",
+                    file_path,
+                    "--outdir",
+                    output_dir,
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
 
             base_name = os.path.splitext(os.path.basename(file_path))[0]
             new_docx_path = os.path.join(output_dir, f"{base_name}.docx")
 
             if os.path.exists(new_docx_path):
-                content = DocumentParser._parse_docx(new_docx_path)
-                # 可选：转换完删除临时文件
-                # os.remove(new_docx_path)
-                return content
-            else:
-                return "<p>格式转换失败：LibreOffice 未生成目标文件。</p>"
+                return DocumentParser._parse_docx(new_docx_path)
 
-        except Exception as e:
-            logger.error(f"转换过程发生错误: {str(e)}")
-            return f"<p>转换异常: {str(e)}</p>"
+            return "<p>格式转换失败：LibreOffice 未生成目标 docx 文件。</p>"
+        except Exception as exc:
+            logger.error("DOC 转换异常: %s", exc)
+            return f"<p>转换异常: {escape(str(exc))}</p>"

@@ -38,9 +38,9 @@
       </div>
 
       <div class="flex-1 flex items-center justify-end">
-        <div class="relative" ref="userMenuRef">
+        <div class="relative z-[70]">
           <div
-            @click="showUserMenu = !showUserMenu"
+            @click.stop="showUserMenu = !showUserMenu"
             class="flex items-center gap-3 bg-white/50 border border-slate-200 py-1.5 pl-2 pr-4 rounded-full cursor-pointer hover:bg-white transition-all select-none"
             :class="{'bg-white border-blue-200 shadow-sm': showUserMenu}"
           >
@@ -53,8 +53,14 @@
             </span>
           </div>
 
+          <div
+            v-if="showUserMenu"
+            class="fixed inset-0 z-[55]"
+            @click="showUserMenu = false"
+          ></div>
+
           <Transition name="menu-fade">
-            <div v-if="showUserMenu" class="absolute right-0 top-12 w-40 bg-white rounded-xl shadow-2xl border border-slate-100 py-2 z-[60]">
+            <div v-if="showUserMenu" class="absolute right-0 top-12 w-40 bg-white rounded-xl shadow-2xl border border-slate-100 py-2 z-[60]" @click.stop>
               <button @click="openChangePwd" class="w-full px-4 py-2.5 text-left text-sm text-slate-600 hover:bg-blue-50 hover:text-blue-600 flex items-center gap-2 transition-colors">
                 <svg class="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"/></svg>
                 修改密码
@@ -172,25 +178,17 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { changePassword } from '@/api/auth'
 
 const router = useRouter()
 const username = ref('张三')
 const showUserMenu = ref(false)
-const userMenuRef = ref(null)
-
-const handleClickOutside = (event) => {
-  if (userMenuRef.value && !userMenuRef.value.contains(event.target)) showUserMenu.value = false
-}
 
 onMounted(() => {
   username.value = localStorage.getItem('username') || '管理员'
-  window.addEventListener('click', handleClickOutside)
 })
-
-onUnmounted(() => window.removeEventListener('click', handleClickOutside))
 
 const handleLogout = () => {
   localStorage.clear()

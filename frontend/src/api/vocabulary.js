@@ -42,3 +42,36 @@ export function deleteVocabulary(id) {
         method: 'delete'
     })
 }
+
+/**
+ * 导入词库文件（pdf/txt/doc/docx）
+ */
+export function importVocabularyFile(formData) {
+    return request({
+        url: '/vocabulary/import',
+        method: 'post',
+        data: formData
+    })
+}
+
+/**
+ * 上传文档并预览 AI 提取结果
+ */
+export function previewVocabularyImport(formData) {
+    return request({
+        url: '/vocabulary/import/preview',
+        method: 'post',
+        data: formData
+    })
+}
+
+/**
+ * 确认导入预览结果
+ */
+export function confirmVocabularyImport(data) {
+    return request({
+        url: '/vocabulary/import/confirm',
+        method: 'post',
+        data
+    })
+}

@@ -36,6 +36,12 @@ const router = createRouter({
                     name: 'vocabulary',
                     component: () => import('../views/Vocabulary/VocabularyList.vue'),
                     meta: { title: '词库管理' }
+                },
+                {
+                    path: 'vocabulary/import',
+                    name: 'vocabulary-import',
+                    component: () => import('../views/Vocabulary/VocabularyImport.vue'),
+                    meta: { title: '导入词库' }
                 }
             ]
         }

@@ -1,4 +1,8 @@
 @echo off
+
+REM Agent guidance
+echo [NOTICE] Please read AGENTS.md before making changes.
+
 REM AI Document Analysis System - Local Development Start Script (Windows)
 REM Used to start both frontend and backend services
 

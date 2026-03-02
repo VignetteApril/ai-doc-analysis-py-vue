@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# Agent guidance
+echo "[NOTICE] Please read AGENTS.md before making changes."
+
+
 # AI 公文校对系统 - 本地开发启动脚本
 # 用于同时启动前后端服务
 

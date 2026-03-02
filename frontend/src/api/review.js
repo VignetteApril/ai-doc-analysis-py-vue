@@ -1,7 +1,7 @@
 import request from './request'
 
 /**
- * 获取公文列表（分页）
+ * ??????????
  */
 export function getDocumentList(params) {
     return request({
@@ -12,7 +12,7 @@ export function getDocumentList(params) {
 }
 
 /**
- * 用于详情页初始化加载
+ * ??????????
  */
 export function getDocumentDetail(id) {
     return request({
@@ -20,6 +20,8 @@ export function getDocumentDetail(id) {
         method: 'get'
     })
 }
+
+
 
 /**
  * 用于编辑器内容的持久化
