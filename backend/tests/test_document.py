@@ -2,11 +2,12 @@ import pytest
 from app.models.document import Document, ReviewStatus
 
 def test_document_model():
-    """Test Document model creation and status"""
+    """Test Document model creation"""
     doc = Document(
         name="test_document.docx",
         file_path="/tmp/test_document.docx",
-        owner_id=1
+        owner_id=1,
+        status=ReviewStatus.PENDING
     )
     
     assert doc.name == "test_document.docx"
